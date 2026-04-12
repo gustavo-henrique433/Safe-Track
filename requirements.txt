@@ -1,0 +1,9 @@
+flask
+flask-jwt-extended
+flask-login
+sqlalchemy
+flask-sqlalchemy
+Celery
+flask-cors
+flask-socketio
+eventlet

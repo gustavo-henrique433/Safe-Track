@@ -1,0 +1,16 @@
+version: "3.8"
+
+services:
+  api:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: API_RFID
+    ports:
+      - "5001:5000"
+    volumes:
+      - ../:/app
+    environment:  
+      FLASK_APP: app.routes.app
+      FLASK_DEBUG: 1
+      PYTHONPATH: /app/src

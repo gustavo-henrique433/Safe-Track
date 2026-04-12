@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Monitor RFID ESP32</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+</head>
+<body>
+    <div id="notification-container" class="notification-hidden">
+        <div class="notification-content">
+            <span class="notification-icon">✅</span>
+            <div class="notification-text">
+                <strong id="notification-message"></strong>
+                <span id="notification-uid"></span>
+            </div>
+        </div>
+    </div>
+
+    <div class="container">
+        <h2>Monitor de Sistema</h2>
+        
+        <div class="status-panel">
+            <p><strong>Servidor API:</strong> <span id="api-status">Aguardando...</span></p>
+            <p><strong>Status ESP32:</strong> <span id="esp-status">Desconectado</span></p>
+            <p><small id="esp-ip">IP: ---.---.---.---</small></p>
+        </div>
+
+        <hr>
+
+        <h3>Cadastrar Tag Manual</h3>
+        <div class="form-group">
+            <label for="uid">UID da Tag:</label>
+            <input type="text" id="uid" placeholder="Ex: ABC123D4">
+        </div>
+
+        <div class="form-group">
+            <label for="date">Data (YYYY-MM-DD):</label>
+            <input type="text" id="date" placeholder="Ex: 2026-03-19">
+        </div>
+
+        <button onclick="cadastrarRFID()">Cadastrar Manualmente</button>
+
+        <div id="response-message" class="message"></div>
+    </div>
+
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>
