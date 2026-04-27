@@ -22,7 +22,7 @@ def registrar_ususrios():
             return jsonify({'message:' 'Esse email já foi cadastrado !!'}), 400
 
         senha_hash = generate_password_hash(senha)    
-        usuario_registrado = User(nome=nome, email=email, senha=senha_hash, type='user')
+        usuario_registrado = User(nome=nome, email=email, senha=senha_hash, tipo_user='user')
         db.session.add(usuario_registrado)
         db.session.commit()
 
@@ -61,7 +61,7 @@ def registrar_root():
     novo_root = Root(
         nome=nome, 
         email=email, 
-        type='root', 
+        tipo_user='root', 
         senha_root=senha_hash, 
         nivel_permissao=nivel_permissao
     )
@@ -85,7 +85,7 @@ def login():
         return jsonify({
             "message": "Login realizado com sucesso !!",
             "access_token": access_token,
-            "user_type": usuario.type 
+            "user_type": usuario.tipo_user
         }), 200
 
     else:

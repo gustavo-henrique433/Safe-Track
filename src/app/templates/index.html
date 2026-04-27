@@ -1,50 +1,429 @@
 <!DOCTYPE html>
-<html lang="pt-br">
+<html lang="pt-BR" class="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Monitor RFID ESP32</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <title>Patrimonio IC</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
+
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        gray: { 900: '#111827', 800: '#1f2937', 700: '#374151' },
+                        emerald: { 500: '#10b981' }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        /* Brilho do Logo (Verde Esmeralda e Branco) */
+        .logo-neon {
+            text-shadow: 0 0 8px rgba(255, 255, 255, 0.5), 0 0 15px rgba(255, 255, 255, 0.3);
+        }
+        .icone-neon {
+            filter: drop-shadow(0 0 10px rgba(241, 241, 241, 0.9));
+        }
+        .ponto-neon {
+            text-shadow: 0 0 10px #10b981, 0 0 20px #10b981, 0 0 30px #10b981;
+        }
+
+        /* Brilho do Menu Lateral (Letras e Caixa) */
+        .aba-btn {
+            transition: all 0.3s ease;
+        }
+        
+        /* Quando a aba está ATIVA (Índigo) */
+        .aba-btn.bg-indigo-600 {
+            box-shadow: 0 0 18px rgba(79, 70, 229, 0.5);
+            text-shadow: 0 0 10px rgba(255, 255, 255, 0.8);
+        }
+
+        /* Quando passamos o mouse nas abas INATIVAS */
+        .aba-btn:not(.bg-indigo-600):hover {
+            text-shadow: 0 0 12px rgba(255, 255, 255, 0.7);
+        }
+    </style>
 </head>
-<body>
-    <div id="notification-container" class="notification-hidden">
-        <div class="notification-content">
-            <span class="notification-icon">✅</span>
-            <div class="notification-text">
-                <strong id="notification-message"></strong>
-                <span id="notification-uid"></span>
+<body class="bg-gray-900 text-gray-100 font-sans antialiased h-screen overflow-hidden flex">
+
+    <div id="tela-login" class="fixed inset-0 bg-gray-900 z-50 flex items-center justify-center">
+        <div class="bg-gray-800 p-8 rounded-xl border border-gray-700 shadow-2xl w-full max-w-md">
+           <div class="text-center mb-8">
+                <img src="/static/logo_ic.png" alt="Logo Patrimônio" class="w-64 md:w-80 h-auto mx-auto mb-4 icone-neon">
+                <h1 class="text-3xl font-bold tracking-wider text-white logo-neon">
+                    Patrimônio IC<span class="text-emerald-400 ponto-neon"></span>
+                </h1>
+            </div>
+            <form onsubmit="event.preventDefault(); fazerLogin();" class="space-y-4">
+                <div>
+                    <label class="block text-sm text-gray-400 mb-1">E-mail</label>
+                    <input type="email" id="login_email" class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white focus:border-indigo-500 outline-none" required>
+                </div>
+                <div>
+                    <label class="block text-sm text-gray-400 mb-1">Senha</label>
+                    <input type="password" id="login_senha" class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white focus:border-indigo-500 outline-none" required>
+                </div>
+                <button type="submit" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 rounded-lg transition-all mt-6 shadow-md">
+                    Entrar no Sistema
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <aside id="sidebar" class="w-64 bg-gray-800 border-r border-gray-700 flex flex-col justify-between h-full flex-shrink-0 relative z-10 transition-all duration-300 ease-in-out">
+        <div>
+            <div class="h-20 flex items-center justify-center border-b border-gray-700 px-4">
+                <img src="/static/logo_ic.png" alt="Logo Patrimônio" class="w-48 h-auto icone-neon">
+            </div>
+            <nav class="mt-6 px-4 space-y-2">
+                <button onclick="mudarAba('dashboard')" class="w-full flex items-center px-4 py-3 bg-indigo-600 text-white rounded-lg transition-colors group aba-btn" id="btn-dashboard">
+                    <i class="fa-solid fa-chart-pie mr-3 w-5"></i> Visão Geral
+                </button>
+                <button onclick="mudarAba('cadastro')" class="w-full flex items-center px-4 py-3 text-gray-400 hover:bg-gray-700 hover:text-white rounded-lg transition-colors group aba-btn" id="btn-cadastro">
+                    <i class="fa-solid fa-box-open mr-3 w-5"></i> Novo Objeto
+                </button>
+                <button onclick="mudarAba('busca')" class="w-full flex items-center px-4 py-3 text-gray-400 hover:bg-gray-700 hover:text-white rounded-lg transition-colors group aba-btn" id="btn-busca">
+                    <i class="fa-solid fa-boxes-stacked mr-3 w-5"></i> Inventário
+                </button>
+                <button onclick="mudarAba('tags')" class="w-full flex items-center px-4 py-3 text-gray-400 hover:bg-gray-700 hover:text-white rounded-lg transition-colors group aba-btn" id="btn-tags">
+                    <i class="fa-solid fa-tags mr-3 w-5"></i> Gestão de Tags
+                </button>
+                <button onclick="mudarAba('locais')" class="w-full flex items-center px-4 py-3 text-gray-400 hover:bg-gray-700 hover:text-white rounded-lg transition-colors group aba-btn" id="btn-locais">
+                    <i class="fa-solid fa-map-location-dot mr-3 w-5"></i> Gestão de Locais
+                </button>
+            </nav>
+        </div>
+        <div class="p-4 border-t border-gray-700 bg-gray-800">
+            <p class="text-xs text-gray-400 mb-1 uppercase tracking-wider">Status do Sensor</p>
+            <div class="flex items-center">
+                <div class="w-2 h-2 rounded-full bg-red-500 mr-2" id="esp-led"></div>
+                <span id="esp-status" class="text-sm font-medium text-red-500">Aguardando...</span>
+            </div>
+            <p id="esp-ip" class="text-xs text-gray-500 mt-1 font-mono">IP: --.--.--.--</p>
+        </div>
+    </aside>
+
+    <main class="flex-1 flex flex-col h-full bg-gray-900 overflow-y-auto">
+        <header class="px-8 py-4 flex justify-between items-center sticky top-0 bg-gray-900/90 backdrop-blur-sm z-20 border-b border-gray-800 shadow-sm">
+            
+            <div class="flex items-center space-x-4">
+                <button onclick="toggleSidebar()" class="text-gray-400 hover:text-emerald-400 p-2 rounded transition-colors" title="Esconder/Mostrar Menu">
+                    <i class="fa-solid fa-bars text-xl"></i>
+                </button>
+                
+                <h2 class="text-2xl font-bold text-white" id="titulo-pagina">Visão Geral</h2>
+            </div>
+            
+            <div class="flex items-center space-x-4">
+                <span class="text-xs text-emerald-400 border border-emerald-500/30 bg-emerald-500/10 px-3 py-1.5 rounded-full uppercase tracking-wider font-bold">
+                    <i class="fa-solid fa-shield-halved mr-1"></i> Root
+                </span>
+                <button onclick="fazerLogout()" class="bg-gray-800 hover:bg-red-600 text-gray-300 hover:text-white px-4 py-2 rounded-lg transition-all text-sm font-medium">
+                    <i class="fa-solid fa-right-from-bracket mr-2"></i>Sair
+                </button>
+            </div>
+        </header>
+
+        <div class="p-8 pt-4">
+            <section id="aba-dashboard" class="secao-conteudo block">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+                    <div class="bg-gray-800 p-6 rounded-xl border border-gray-700 shadow-lg flex items-center justify-between">
+                        <div>
+                            <p class="text-sm text-gray-400 uppercase tracking-wider">Tags RFID Ativas</p>
+                            <h3 class="text-5xl font-bold text-white mt-2" id="dash-tags">0</h3>
+                        </div>
+                        <i class="fa-solid fa-tags text-emerald-500 text-4xl opacity-20"></i>
+                    </div>
+                    <div class="bg-gray-800 p-6 rounded-xl border border-gray-700 shadow-lg flex items-center justify-between">
+                        <div>
+                            <p class="text-sm text-gray-400 uppercase tracking-wider">Patrimônios Registrados</p>
+                            <h3 class="text-5xl font-bold text-white mt-2" id="dash-objetos">0</h3>
+                        </div>
+                        <i class="fa-solid fa-boxes-stacked text-indigo-500 text-4xl opacity-20"></i>
+                    </div>
+                </div>
+
+                <div class="bg-gray-800 p-6 rounded-xl border border-gray-700 shadow-lg min-h-[300px]">
+                    <h3 class="text-lg font-medium text-gray-300 mb-4 border-b border-gray-700 pb-2">Última Leitura do Sensor</h3>
+                    <div id="resultado-busca" class="flex flex-col items-center justify-center h-48 text-gray-500">
+                        <i class="fa-solid fa-wifi text-4xl mb-3 animate-pulse opacity-50"></i>
+                        <p>Aproxime uma Tag do sensor para visualizar as informações.</p>
+                    </div>
+                </div>
+            </section>
+
+            <section id="aba-cadastro" class="secao-conteudo hidden">
+                <div class="bg-gray-800 p-8 rounded-2xl border border-gray-700 shadow-2xl max-w-2xl mx-auto mt-8 relative overflow-hidden">
+                    <div class="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-emerald-500 to-indigo-500"></div>
+                    
+                    <div class="mb-6">
+                        <h3 class="text-2xl font-bold text-white mb-1">Novo Patrimônio</h3>
+                        <p class="text-sm text-gray-400">Preencha os dados ou aproxime a tag no sensor.</p>
+                    </div>
+
+                    <form id="form-cadastro" class="space-y-5" onsubmit="event.preventDefault(); cadastrarObjeto();">
+                        
+                        <div>
+                            <label class="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">
+                                <i class="fa-solid fa-tag text-emerald-500 mr-1"></i> UID da Tag RFID
+                            </label>
+                            <input type="text" id="tag_rfid_objeto" placeholder="Aguardando leitura ou digite..." 
+                                class="w-full bg-gray-900 border border-gray-600 rounded-lg px-4 py-3 text-emerald-400 font-mono text-lg focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500 transition-all outline-none shadow-inner">
+                        </div>
+
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+                            <div>
+                                <label class="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Nome do Objeto</label>
+                                <input type="text" id="nome_objeto" placeholder="Ex: Notebook Dell" 
+                                    class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2.5 text-white focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all outline-none" required>
+                            </div>
+
+                           <div>
+                                <label class="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Local do Objeto</label>
+                                <select id="local_objeto" class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2.5 text-white focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all outline-none cursor-pointer" required>
+                                    <option value="" disabled selected>Carregando locais...</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div>
+                             <label class="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Foto do Objeto</label>
+                             <input type="file" id="imagem_objeto" accept="image/*" required
+                                 class="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm file:mr-3 file:py-1 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-indigo-600 file:text-white hover:file:bg-indigo-500 transition-all outline-none cursor-pointer">
+                        </div>
+
+                        <div>
+                            <label class="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Descrição Curta</label>
+                            <input type="text" id="descricao_objeto" placeholder="Resumo rápido do item..." 
+                                class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2.5 text-white focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all outline-none" required>
+                        </div>
+
+                        <div>
+                            <label class="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Especificações Completas</label>
+                            <textarea id="especificacoes_objeto" rows="3" placeholder="Detalhes técnicos, número de série, observações..." 
+                                class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2.5 text-white focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all outline-none resize-none"></textarea>
+                        </div>
+
+                        <div id="msg-cadastro" class="text-sm font-bold mt-2 text-center"></div>
+                        
+                        <button type="submit" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-lg py-3 rounded-lg transition-all shadow-[0_0_15px_rgba(16,185,129,0.3)] hover:shadow-[0_0_25px_rgba(16,185,129,0.6)] mt-2">
+                            <i class="fa-solid fa-check mr-2"></i> Registrar Patrimônio
+                        </button>
+                    </form>
+                </div>
+            </section>
+
+            <section id="aba-busca" class="secao-conteudo hidden">
+                <div class="bg-gray-800 p-6 rounded-xl border border-gray-700 shadow-lg mb-6">
+                    <div class="flex space-x-4">
+                        <input type="text" id="input_busca_manual" placeholder="Digite a UID ou ID do banco..." class="flex-1 bg-gray-700 border border-gray-600 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-indigo-500">
+                        <button onclick="buscarObjetoManual('uid')" class="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3 rounded-lg font-bold shadow-md transition-all">Buscar UID</button>
+                        <button onclick="buscarObjetoManual('id')" class="bg-gray-600 hover:bg-gray-500 text-white px-6 py-3 rounded-lg font-bold shadow-md transition-all">Buscar ID</button>
+                    </div>
+                </div>
+
+                <div class="flex justify-between items-end mb-4">
+                    <h3 class="text-xl font-bold text-white">Todos os Patrimônios</h3>
+                    <button onclick="listarTodosObjetos()" class="text-sm text-indigo-400 hover:text-indigo-300"><i class="fa-solid fa-rotate mr-1"></i> Atualizar Lista</button>
+                </div>
+                
+                <div id="grid-inventario" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 pb-20">
+                    </div>
+            </section>
+
+            <section id="aba-tags" class="secao-conteudo hidden">
+                <div class="bg-gray-800 rounded-xl border border-gray-700 shadow-lg overflow-hidden">
+                    <div class="p-6 border-b border-gray-700 flex justify-between items-center bg-gray-800">
+                        <div>
+                            <h3 class="text-xl font-bold text-white">Tags Registradas no Sistema</h3>
+                            <p class="text-sm text-gray-400">Total de cartões/tags que o sensor já conheceu.</p>
+                        </div>
+                        <button onclick="listarTodasTags()" class="bg-indigo-600 hover:bg-indigo-700 px-4 py-2 rounded-lg text-white font-bold text-sm shadow-md transition-all">
+                            <i class="fa-solid fa-rotate mr-2"></i>Recarregar
+                        </button>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left text-sm text-gray-300">
+                            <thead class="bg-gray-900/50 text-gray-400 text-xs uppercase">
+                                <tr>
+                                    <th class="px-6 py-4">UID (Código Hex)</th>
+                                    <th class="px-6 py-4">Data de Leitura</th>
+                                    <th class="px-6 py-4">Status / Vínculo</th> <th class="px-6 py-4 text-right">Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tabela-tags" class="divide-y divide-gray-700">
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <section id="aba-locais" class="secao-conteudo hidden">
+                
+                <div class="flex flex-wrap gap-4 mb-8 border-b border-gray-700 pb-4">
+                    <button onclick="mudarSubAbaLocais('visualizar')" id="btn-sub-visualizar" class="px-5 py-2.5 bg-indigo-600 text-white rounded-lg font-bold transition-all shadow-[0_0_15px_rgba(79,70,229,0.4)]">
+                        <i class="fa-solid fa-list mr-2"></i>Visualizar Locais
+                    </button>
+                    <button onclick="mudarSubAbaLocais('cadastrar')" id="btn-sub-cadastrar" class="px-5 py-2.5 bg-gray-800 text-gray-400 hover:bg-gray-700 hover:text-white border border-gray-700 rounded-lg font-bold transition-all">
+                        <i class="fa-solid fa-plus mr-2"></i>Cadastrar Novo
+                    </button>
+                    <button onclick="mudarSubAbaLocais('editar')" id="btn-sub-editar" class="px-5 py-2.5 bg-gray-800 text-gray-400 hover:bg-gray-700 hover:text-white border border-gray-700 rounded-lg font-bold transition-all">
+                        <i class="fa-solid fa-pen mr-2"></i>Editar Existente
+                    </button>
+                </div>
+
+                <div id="subaba-visualizar" class="bg-gray-800 rounded-xl border border-gray-700 shadow-lg overflow-hidden block">
+                    <div class="p-6 border-b border-gray-700 flex justify-between items-center bg-gray-800">
+                        <div>
+                            <h3 class="text-xl font-bold text-white">Locais Registrados</h3>
+                            <p class="text-sm text-gray-400">Salas e laboratórios disponíveis no sistema.</p>
+                        </div>
+                        <button onclick="carregarLocaisNoDropdown()" class="bg-indigo-600 hover:bg-indigo-700 px-4 py-2 rounded-lg text-white font-bold text-sm shadow-md transition-all">
+                            <i class="fa-solid fa-rotate mr-2"></i>Recarregar
+                        </button>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left text-sm text-gray-300">
+                            <thead class="bg-gray-900/50 text-gray-400 text-xs uppercase">
+                                <tr>
+                                    <th class="px-6 py-4">ID</th>
+                                    <th class="px-6 py-4">Endereço / Sala</th>
+                                    <th class="px-6 py-4">Descrição</th>
+                                    <th class="px-6 py-4">Responsável</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tabela-locais" class="divide-y divide-gray-700">
+                                </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div id="subaba-cadastrar" class="bg-gray-800 p-8 rounded-2xl border border-gray-700 shadow-lg relative overflow-hidden max-w-2xl mx-auto hidden">
+                    <div class="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-emerald-500 to-indigo-500"></div>
+                    <h3 class="text-xl font-bold text-white mb-6"><i class="fa-solid fa-plus text-emerald-500 mr-2"></i>Cadastrar Novo Local</h3>
+                    
+                    <form id="form-local" class="space-y-4" onsubmit="event.preventDefault(); cadastrarLocal();">
+                        <div>
+                            <label class="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Endereço / Sala</label>
+                             <input type="text" id="endereco_local" placeholder="Ex: Laboratório 101" class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white focus:ring-2 focus:ring-emerald-500/50 outline-none" required>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Descrição</label>
+                            <input type="text" id="descricao_local" placeholder="Ex: Prédio de Redes" class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white focus:ring-2 focus:ring-emerald-500/50 outline-none" required>
+                        </div>
+                         <div>
+                            <label class="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Responsável</label>
+                            <input type="text" id="responsavel_local" placeholder="Ex: Prof. Anderson" class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white focus:ring-2 focus:ring-emerald-500/50 outline-none" required>
+                        </div>
+                        <div id="msg-local" class="text-sm font-bold text-center mt-2"></div>
+                        <button type="submit" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 rounded-lg transition-all mt-4">
+                            Salvar Local
+                        </button>
+                    </form>
+                </div>
+
+                <div id="subaba-editar" class="bg-gray-800 p-8 rounded-2xl border border-gray-700 shadow-lg relative overflow-hidden max-w-2xl mx-auto hidden">
+                    <div class="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-amber-500 to-orange-500"></div>
+                    <h3 class="text-xl font-bold text-white mb-6"><i class="fa-solid fa-pen text-amber-500 mr-2"></i>Editar Local Existente</h3>
+                    
+                    <form id="form-editar-local" class="space-y-4" onsubmit="event.preventDefault(); editarLocal();">
+                        <div>
+                            <label class="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Selecione o Local a Editar</label>
+                            <select id="id_editar_local" onchange="preencherFormularioEdicao(this.value)" class="w-full bg-gray-900 border border-gray-600 rounded-lg px-4 py-2 text-amber-400 font-mono focus:ring-2 focus:ring-amber-500/50 outline-none cursor-pointer" required>
+                                <option value="" disabled selected>Carregando locais...</option>
+                                </select>
+                        </div>
+                        <div>
+                             <label class="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Novo Endereço / Sala</label>
+                            <input type="text" id="novo_endereco_local" placeholder="Novo nome da sala" class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white focus:ring-2 focus:ring-amber-500/50 outline-none" required>
+                        </div>
+                         <div>
+                            <label class="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Nova Descrição</label>
+                            <input type="text" id="nova_descricao_local" placeholder="Nova descrição" class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white focus:ring-2 focus:ring-amber-500/50 outline-none" required>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Novo Responsável</label>
+                            <input type="text" id="novo_responsavel_local" placeholder="Novo responsável" class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white focus:ring-2 focus:ring-amber-500/50 outline-none" required>
+                        </div>
+                        <div id="msg-editar-local" class="text-sm font-bold text-center mt-2"></div>
+                        <button type="submit" class="w-full bg-amber-600 hover:bg-amber-500 text-white font-bold py-3 rounded-lg transition-all mt-4">
+                            Atualizar Local
+                        </button>
+                    </form>
+                </div>
+
+            </section>
+
+        </div>
+    </main>
+
+    <div id="modal-busca" class="fixed inset-0 bg-black/80 z-[60] hidden flex items-center justify-center backdrop-blur-sm transition-opacity">
+        <div class="bg-gray-800 rounded-2xl border border-gray-700 shadow-2xl w-full max-w-md overflow-hidden transform transition-all">
+            <div class="h-2 w-full bg-gradient-to-r from-emerald-500 to-indigo-500"></div>
+            
+            <div class="p-6">
+                <div class="flex justify-between items-start mb-4">
+                    <h3 class="text-2xl font-bold text-white" id="modal-busca-nome">Nome do Objeto</h3>
+                    <button onclick="fecharModalBusca()" class="text-gray-400 hover:text-red-500 transition-colors">
+                        <i class="fa-solid fa-xmark text-2xl"></i>
+                    </button>
+                </div>
+                
+                <div class="mb-5">
+                    <img id="modal-busca-img" src="" alt="Foto do Objeto" class="h-64 w-full object-contain bg-gray-900/50 rounded-xl border border-gray-700/50 p-3 shadow-inner">
+                </div>
+
+                <div class="space-y-4">
+                    <div>
+                         <p class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Descrição Curta</p>
+                        <p class="text-sm text-gray-300" id="modal-busca-desc">Descrição aqui</p>
+                    </div>
+                    
+                    <div class="grid grid-cols-2 gap-4 bg-gray-900/50 p-4 rounded-xl border border-gray-700/50">
+                        <div>
+                            <p class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">
+                                <i class="fa-solid fa-tag text-emerald-500 mr-1"></i> UID da Tag
+                            </p>
+                            <p class="text-sm text-emerald-400 font-mono" id="modal-busca-uid">00:00:00</p>
+                        </div>
+                        <div>
+                            <p class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">
+                                <i class="fa-solid fa-map-location-dot text-indigo-400 mr-1"></i> Localização
+                            </p>
+                            <p class="text-sm text-indigo-300 font-medium" id="modal-busca-local">Sala 101</p>
+                        </div>
+                    </div>
+
+                    <div>
+                        <p class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Especificações Técnicas</p>
+                        <p class="text-sm text-gray-400" id="modal-busca-specs">-</p>
+                    </div>
+                </div>
+
+                <div class="mt-8">
+                    <button onclick="fecharModalBusca()" class="w-full bg-gray-700 hover:bg-gray-600 text-white font-bold py-3 rounded-lg transition-colors border border-gray-600 shadow-md">
+                        Fechar Informações
+                    </button>
+                </div>
             </div>
         </div>
     </div>
 
-    <div class="container">
-        <h2>Monitor de Sistema</h2>
-        
-        <div class="status-panel">
-            <p><strong>Servidor API:</strong> <span id="api-status">Aguardando...</span></p>
-            <p><strong>Status ESP32:</strong> <span id="esp-status">Desconectado</span></p>
-            <p><small id="esp-ip">IP: ---.---.---.---</small></p>
+    <div id="notification-container" class="fixed bottom-6 right-6 bg-gray-800 border-l-4 border-emerald-500 text-white p-4 rounded-lg shadow-2xl transition-all duration-300 transform translate-y-20 opacity-0 flex items-center space-x-4 z-50">
+        <div class="bg-emerald-500/20 p-2 rounded-full"><i class="fa-solid fa-bell text-emerald-500"></i></div>
+        <div>
+            <h4 id="notification-message" class="font-bold text-sm">Leitura Detectada</h4>
+            <p id="notification-uid" class="text-xs text-gray-400 font-mono mt-1">UID: --:--</p>
         </div>
-
-        <hr>
-
-        <h3>Cadastrar Tag Manual</h3>
-        <div class="form-group">
-            <label for="uid">UID da Tag:</label>
-            <input type="text" id="uid" placeholder="Ex: ABC123D4">
-        </div>
-
-        <div class="form-group">
-            <label for="date">Data (YYYY-MM-DD):</label>
-            <input type="text" id="date" placeholder="Ex: 2026-03-19">
-        </div>
-
-        <button onclick="cadastrarRFID()">Cadastrar Manualmente</button>
-
-        <div id="response-message" class="message"></div>
     </div>
 
-    <script src="{{ url_for('static', filename='script.js') }}"></script>
+    <script src="static/script.js"></script>
 </body>
 </html>

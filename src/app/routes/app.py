@@ -1,5 +1,6 @@
 import os
-from flask import Flask
+import logging 
+from flask import Flask, request
 from flask_jwt_extended import JWTManager
 from flask_cors import CORS
 from flask_login import LoginManager
@@ -8,12 +9,15 @@ from flask_socketio import SocketIO
 from werkzeug.security import generate_password_hash
 from app.config.extensions import db
 from src.database.models import User, Root
+from src.logs.config_log import iniciar_logs
 
 
 from app.routes.rfid import rfid_bp
+from app.routes.object import object_bp
+from app.routes.auth import auth_bp
+from app.routes.local import local_bp
 
 BLOCKLIST = set()
-##broker_url = os.getenv('CELERY_BROKER_URL', 'amqp://guest:guest@localhost:5672//')
 BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../"))
 
 app = Flask(__name__, 
@@ -26,8 +30,8 @@ CORS(app)
 
 ##app.config['CELERY_BROKER_URL'] = broker_url
 app.config['SQLALCHEMY_DATABASE_URI'] = f"sqlite:///{BASE_DIR}/database/hermes.db"
-app.config['JWT_SECRET_KEY'] = 'k1a2b3c4d5e6f7g8h9i0j1k2l3m4n5o6p7q8r9s0t1u2v3w4x5y6z7'
-app.config['SECRET_KEY'] = 'a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6q7r8s9t0u1v2w3x4y5z6'
+app.config['JWT_SECRET_KEY'] = '************'
+app.config['SECRET_KEY'] = '****************'
 app.config['JWT_TOKEN_LOCATION'] = ['headers']
 ##app.config['CELERY_RESULT_BACKEND'] = 'db+sqlite:////app/database/results.sqlite'
 
@@ -37,6 +41,21 @@ jwt = JWTManager(app)
 
 login_manager = LoginManager()
 login_manager.init_app(app)
+
+@app.before_request
+def log_de_trafego():
+    metodo = request.method       
+    caminho = request.path        
+    ip = request.remote_addr
+
+    logging.info(f"Acesso | IP: {ip} | Método: {metodo} | Rota: {caminho}")
+
+@app.errorhandler(Exception)
+def erro_global(e):
+
+    logging.error(f"Erro interno detectado: {e}", exc_info=True)
+    return jsonify({"message": "Ops! Ocorreu um erro interno no servidor."}), 500    
+
 
 @login_manager.user_loader
 def load_user(user_id):
@@ -52,6 +71,9 @@ def index():
 
 
 app.register_blueprint(rfid_bp)
+app.register_blueprint(object_bp)
+app.register_blueprint(auth_bp)
+app.register_blueprint(local_bp)
 
 with app.app_context():
     db.create_all()
@@ -71,10 +93,15 @@ with app.app_context():
                 senha_root="root123",
                 nivel_permissao="total"
             )
-            db.session.add(root_entry)
+            
+            db.session.add(admin_root)
             db.session.commit()
-    except Exception:
+            print("Usuário Root padrão criado com sucesso!")
+
+    except Exception as e:
         db.session.rollback()
+
+        print(f"Erro ao criar o usuário Root padrão: {e}")
 
 
 
