@@ -62,6 +62,7 @@ Para subir o ambiente é necessario navegar atá o diretorio docker, uma vez den
 cd docker
 docker-compose up --build
 ```
+<p>- OBS: Tanto o ESP32  quanto o Docker devem estar conectados a mesma rede</p>
 
 ### Montagem do ESP32
 
@@ -81,7 +82,6 @@ docker-compose up --build
 <p>Para acompanhar a API em tempo real basta acessar Localhost:5001 que é a porta de acesso onde roda o front-end que exibe informações como status da API e do ESP32 assim como seu IP</p>
 <img width="800" height="436" alt="Front Borrado png" src="https://github.com/user-attachments/assets/242ad038-06b0-4300-83d8-ac32a96e242b" />
 <p>- OBS: É possivél e recomendado acompanhar a API através do terminal que está executando o container</p>
-<p>- OBS: Tanto o ESP32  quanto o Docker devem estar conectados a mesma rede</p>
 <img width="800" height="436" alt="Design sem nome" src="https://github.com/user-attachments/assets/11ab6857-db1c-41e6-96a9-c70431f68c84" />
 
 ## Vantagens:
