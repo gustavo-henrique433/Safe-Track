@@ -50,7 +50,7 @@ Safe-Track é um projeto desenvolvido por alunos do 4° semestre de ADS da Fatec
 <p>/database: Banco de dados do sistema e contém arquivos como como Hermes.db  e model.py</p>
 
 
-## Como rodar o projeto:
+## Como subir o ambiente:
 
 ### Subindo a API
 
