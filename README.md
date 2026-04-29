@@ -17,7 +17,8 @@ Safe-Track é um projeto desenvolvido por alunos do 4° semestre de ADS da Fatec
 ## Tecnologias:
 
 - Python + Flask  
-- C++  
+- C++
+- JS + Tailwind CSS
 - Docker  
 - ESP32  
 - Sensor RFID RC522  
