@@ -117,4 +117,4 @@ docker-compose up --build
 
 <p>- Sistema de Log's: Maior controle e segurança das ações realizadas pelos usuário </p>
 <p>- Autenticação de dois fatores: Ultilizar o Gmail como sisema SMTP para envio de códigos de acesso.</p>
-<p>- Mudança de protocolo: Alterar a comunicação http entre o sistema embarcado e a API, onde pássara a ser feita por um Broker MQQT mosquito, desaclopando assim o ESP32 e aumentando a velocidade de envio de informações, isto se deve pelo fato de o MQQT ser mais leve que HTTP.</p>
+<p>- Mudança de protocolo: Alterar a comunicação http entre o sistema embarcado e a API, onde pássara a ser feita por um Broker MQQT mosquito,      desaclopando assim o ESP32 e aumentando a velocidade de envio de informações, isto se deve pelo fato de o MQQT ser mais leve que HTTP.</p>
