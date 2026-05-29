@@ -113,7 +113,7 @@ docker-compose up --build
 <p>- Arquitetura moderna simples facilitando alterações e manutenções necessarias sem muita dor de cabeça;</p>
 <p>- Baixo custo e otima eificiência operacional.</p>
 
-##Futuras atualizações:
+## Futuras atualizações:
 
 <p>- Sistema de Log's: Maior controle e segurança das ações realizadas pelos usuário </p>
 <p>- Autenticação de dois fatores: Ultilizar o Gmail como sisema SMTP para envio de códigos de acesso.</p>
