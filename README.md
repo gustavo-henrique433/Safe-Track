@@ -78,7 +78,13 @@ docker-compose up --build
 <p> Já para o Led vermelho deve-se ultilizar o pino 13 e para o vermelho o pino 12 </p>
 
 
-## Prototipação:
+<p> Será necessario a ultilização de alguma IDE para sistemas embarcados, nesse caso será ultilizado o Arduino IDE 2.3.4, basta baixar a pasta Core e coloca-la dentro do diretorio /Arduino, depois basta abrir o compilador. </p> 
+<p> Uma vez aberto deve-se ir em biblioteca e baixar os modulos do ESP32 e o modulo do sensor RFID especificamente RC522 </p>
+<p>Após isso basta selecionar a porta COM em que o ESP32 está ligado e compilar o programa o que leva cerca de dois a três minutos</p>
+<p>- OBS: Caso a IDE não reconheça a porta COM com o ESP32 deverá se instalar o driver, no caso do ESP32 Dev Modulo o driver é o CP210x </p>
+
+
+### Prototipação:
 
 <p>O prototipo batizado de Hermes ainda está na fase de desenvolvimento:</p>
 <p align="center"> <img width="600" height="400" alt="Prototipo" src="https://github.com/user-attachments/assets/ba434920-3f66-4806-876c-bd43c245a221" /> </p> 
@@ -91,11 +97,6 @@ docker-compose up --build
 
 <h4>Imagem PCB:</h4>
 <p align="center">  <img width="477" height="383" alt="PCB_PCB_Safe_Track_2026-05-29" src="https://github.com/user-attachments/assets/149beda5-2f6a-401e-af9f-118cdab87f19" /> </p>
-
-<p> Será necessario a ultilização de alguma IDE para sistemas embarcados, nesse caso será ultilizado o Arduino IDE 2.3.4, basta baixar a pasta Core e coloca-la dentro do diretorio /Arduino, depois basta abrir o compilador. </p> 
-<p> Uma vez aberto deve-se ir em biblioteca e baixar os modulos do ESP32 e o modulo do sensor RFID especificamente RC522 </p>
-<p>Após isso basta selecionar a porta COM em que o ESP32 está ligado e compilar o programa o que leva cerca de dois a três minutos</p>
-<p>- OBS: Caso a IDE não reconheça a porta COM com o ESP32 deverá se instalar o driver, no caso do ESP32 Dev Modulo o driver é o CP210x </p>
 
 ### Acompanhando funcionamento:
 
