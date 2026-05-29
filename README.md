@@ -81,7 +81,7 @@ docker-compose up --build
 ## Prototipação:
 
 <p>O prototipo batizado de Hermes ainda está na fase de desenvolvimento:</p>
-<p align="center"> <img width="1600" height="1201" alt="Prototipo" src="https://github.com/user-attachments/assets/ba434920-3f66-4806-876c-bd43c245a221" /> </p> 
+<p align="center"> <img width="800" height="600" alt="Prototipo" src="https://github.com/user-attachments/assets/ba434920-3f66-4806-876c-bd43c245a221" /> </p> 
 
 
 
