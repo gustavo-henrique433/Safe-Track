@@ -38,9 +38,11 @@ Safe-Track é um projeto desenvolvido por alunos do 4° semestre de ADS da Fatec
 ## Arquitetura: Terminar
 
 <p>- Python + Flask + SQLAlchemy: Usado para a criação e elaboração das rotas da API onde ocorre o recebimento e  envio das informações, lógica e de processamento, além da elaboração do banco de dados;</p>  
-<p>- Docker;</p>
-<p>- C++: Usado para a programação das instruções do ESP32 e sensores;</p>
-<p>- JavaScript e HTML</p>
+<p>- Docker: Permite que a aplicação rode de maneira leve e rapida em qualquer máquina ou Hardwar;</p>
+<p>- C++: Usado para a programação das instruções do ESP32 e sensores permitindo maior eficiência e rapidez graça ao baixo nível de C++;</p>
+<p>- JavaScript e Tailwind: Usado para a criação de um Front-End leve com uma UI/UX intuitiva e minimalista.</p>
+
+<p>- </p>
 
 ## Estrutura de diretorios:
 
