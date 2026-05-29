@@ -89,7 +89,7 @@ docker-compose up --build
 <p>O prototipo batizado de Hermes ainda está na fase de desenvolvimento:</p>
 <p align="center"> <img width="600" height="400" alt="Prototipo" src="https://github.com/user-attachments/assets/ba434920-3f66-4806-876c-bd43c245a221" /> </p> 
 
-<p>No futuro esperamos imprimir a Placa de Circuito Impresso (PCB) que servirá como estrutura fisica e eletrica permitindo assim a eliminação do uso da protoboard e Jumpers, conferindo melhor Design e usabilidade. O software ultilizado para o dimensionamento da PCB foi o EasyEDA </p>
+<p>No futuro esperamos imprimir a Placa de Circuito Impresso (PCB) que servirá como estrutura fisica e eletrica permitindo assim a eliminação do uso da protoboard e Jumpers, conferindo melhor Design e usabilidade. O software utilizado para o dimensionamento da PCB foi o EasyEDA </p>
 
 
 <h4>Esquema elétrico: </h4>
