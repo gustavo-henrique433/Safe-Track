@@ -86,8 +86,8 @@ docker-compose up --build
 <p>No futuro esperamos imprimir a Placa de Circuito Impresso (PCB) que servirá como estrutura fisica e eletrica permitindo assim a eliminação do uso da protoboard e Jumpers, conferindo melhor Design e usabilidade. O software ultilizado para o dimensionamento da PCB foi o EasyEDA </p>
 
 
-<h4>Esquema eletrico: </h4>
-<p align="center"> <img width="800" height="600" alt="Schematic_Safe_Track_2026-05-29" src="https://github.com/user-attachments/assets/1aedc66b-c6ec-4884-9dbe-ad870c8dec62" /> </p>
+<h4>Esquema elétrico: </h4>
+<p align="center"> <img width="600" height="400" alt="Schematic_Safe_Track_2026-05-29" src="https://github.com/user-attachments/assets/1aedc66b-c6ec-4884-9dbe-ad870c8dec62" /> </p>
 
 <h4>Imagem PCB:</h4>
 <p align="center">  <img width="477" height="383" alt="PCB_PCB_Safe_Track_2026-05-29" src="https://github.com/user-attachments/assets/149beda5-2f6a-401e-af9f-118cdab87f19" /> </p>
