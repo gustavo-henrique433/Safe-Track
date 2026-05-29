@@ -35,7 +35,7 @@ Safe-Track é um projeto desenvolvido por alunos do 4° semestre de ADS da Fatec
 
 ---
 
-## Arquitetura: Terminar
+## Arquitetura: 
 
 <p>- Python + Flask + SQLAlchemy: Usado para a criação e elaboração das rotas da API onde ocorre o recebimento e  envio das informações, lógica e de processamento, além da elaboração do banco de dados;</p>  
 <p>- Docker: Permite que a aplicação rode de maneira leve e rapida em qualquer máquina ou Hardwar;</p>
@@ -100,7 +100,7 @@ docker-compose up --build
 
 ## Acompanhando funcionamento:
 
-<p>Para acompanhar a API em tempo real basta acessar Localhost:5001 que é a porta de acesso onde roda o front-end que exibe informações como status da API e do ESP32 assim como seu IP</p>
+<p>Para acompanhar a API em tempo real basta acessar Localhost ou IP da VM +  :5001 que é a porta de acesso onde roda o front-end que exibe informações como status da API e do ESP32 assim como seu IP</p>
 <p align="center"> <img width="1436" height="762" alt="Captura de tela 2026-05-29 105221" src="https://github.com/user-attachments/assets/8d6277d4-f767-4493-a401-868f6bb0e448" /> </p>
 <p align="center">- OBS: É possível e recomendado acompanhar a API através do terminal que está executando o container</p>
 <p align="center"><img width="800" height="436" alt="Design sem nome" src="https://github.com/user-attachments/assets/11ab6857-db1c-41e6-96a9-c70431f68c84" /> </p>
