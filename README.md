@@ -73,6 +73,13 @@ docker-compose up --build
 <p align="center"> <img width="698" height="268" alt="Pinos RFID" src="https://github.com/user-attachments/assets/6e11e82c-da87-4d66-ac0e-a1e41c9ef2a5" /> </p> 
 <p> Já para o Led vermelho deve-se ultilizar o pino 13 e para o vermelho o pino 12 </p>
 
+## Prototipação:
+
+<p>O prototipo batizado de Hermes ainda está na fase de desenvolvimento:</p>
+<p align="center"> <img width="1600" height="1201" alt="Prototipo" src="https://github.com/user-attachments/assets/ba434920-3f66-4806-876c-bd43c245a221" /> </p> 
+
+
+
 
 
 <p> Será necessario a ultilização de alguma IDE para sistemas embarcados, nesse caso será ultilizado o Arduino IDE 2.3.4, basta baixar a pasta Core e coloca-la dentro do diretorio /Arduino, depois basta abrir o compilador. </p> 
@@ -94,3 +101,8 @@ docker-compose up --build
 <p>- Funciona como um serviço Daemon logo seu funcioanamento é continuo permitindo assim maior segurança e automatização;</p>
 <p>- Arquitetura moderna simples facilitando alterações e manutenções necessarias sem muita dor de cabeça;</p>
 <p>- Baixo custo e otima eificiência operacional.</p>
+
+##Futuras atualizações:
+
+<p>- Sistema de Log's: Maior controle e segurança das ações realizadas pelos usuário </p>
+<p>- Autenticação de dois fatores: Ultilizar o Gmail como sisema SMTP para envio de códigos de acesso.</p>
