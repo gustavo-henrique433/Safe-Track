@@ -48,6 +48,7 @@ Safe-Track é um projeto desenvolvido por alunos do 4° semestre de ADS da Fatec
 
 <p>Na raiz do projeto se encontram três diretorios principais que contém o cerebro do projeto</p>
 <p>/docker: É onde se localiza os arquivos DockerFile e Docker-compose necessarios para a montagem e funcionamento do container</p>
+<p>/core: Local onde está o código C++ que rege o funcionamento do ESP32</p>
 <p>/src: É divido em outros dois subdiretorios sendo estes /app e /database </p>
 <p>/app: É onde está o Back-end e Front-End do projeto e contém pastas como as rotas da API, Statics e Templates em que fica localizado todo o front-end</p>
 <p>routes: É o diretorio que contém todas as rotas Flask da API</p>
