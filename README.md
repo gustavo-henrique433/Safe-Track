@@ -100,7 +100,7 @@ docker-compose up --build
 <h3>Imagem PCB:</h3>
 <p align="center">  <img width="477" height="383" alt="PCB_PCB_Safe_Track_2026-05-29" src="https://github.com/user-attachments/assets/149beda5-2f6a-401e-af9f-118cdab87f19" /> </p>
 
-<h3>Imagem modelo 3D:</h3>
+<h3>Modelo 3D:</h3>
 <p align="center"><img width="600" height="400" alt="modelo 3d PCB" src="https://github.com/user-attachments/assets/10275aa7-3860-4530-893d-9b7d117c5b16" /></p>
 
 ## Acompanhando funcionamento:
