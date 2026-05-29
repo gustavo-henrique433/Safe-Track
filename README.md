@@ -73,7 +73,7 @@ docker-compose up --build
 <p align="center"> <img width="698" height="268" alt="Pinos RFID" src="https://github.com/user-attachments/assets/6e11e82c-da87-4d66-ac0e-a1e41c9ef2a5" /> </p> 
 <p>Já para  a montagem da Tela LCD modelo SH1106  a pinagem a seguir deve ser: </p>
 <p>SDA - Pino 21 , SCK - Pino 22, GND - Pino GND e VDD alimentar com 3.3V </p>
-<p align="center"> <img width="1200" height="1600" alt="Tela LCD" src="https://github.com/user-attachments/assets/e6f06798-b0c9-4764-b734-c86843b118f9" /></p>
+<p align="center"> <img width="600" height="400" alt="Tela LCD" src="https://github.com/user-attachments/assets/e6f06798-b0c9-4764-b734-c86843b118f9" /></p>
 
 <p> Já para o Led vermelho deve-se ultilizar o pino 13 e para o vermelho o pino 12 </p>
 
