@@ -42,7 +42,7 @@ Safe-Track é um projeto desenvolvido por alunos do 4° semestre de ADS da Fatec
 <p>- C++: Usado para a programação das instruções do ESP32 e sensores permitindo maior eficiência e rapidez graça ao baixo nível de C++;</p>
 <p>- JavaScript e Tailwind: Usado para a criação de um Front-End leve com uma UI/UX intuitiva e minimalista.</p>
 
-<p>- </p>
+
 
 ## Estrutura de diretorios:
 
