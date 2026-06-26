@@ -110,6 +110,17 @@ docker-compose up --build
 <p align="center">- OBS: É possível e recomendado acompanhar a API através do terminal que está executando o container</p>
 <p align="center"><img width="800" height="436" alt="Design sem nome" src="https://github.com/user-attachments/assets/11ab6857-db1c-41e6-96a9-c70431f68c84" /> </p>
 
+## Sistema de Log's: 
+<p>O sistema de Log's permite a auditoria de eventos dentro da API e servidor, possibilitando maior controle e segurança.</p>
+<p>Para a criação deste sistema de Log's foi usado a biblioteca logging de Python graças a sua versatiliade e facilidade</p>
+<p align="center"><img width="1536" height="465" alt="image" src="https://github.com/user-attachments/assets/bdf92ff7-48e5-4100-b162-fdb0ea7f32ed" /></p>
+<p>Assim como na imagem, os logs capturam diferentes niveis de eventos como INFO, ERROS, WARNING, INFORMATION e TRACE junto do IP do usuario, a rota acessada e a data,  onde neste momento foram dividios em apenas dois arquivos .log sendo debug.log e error.log</p>
+
+<h3>Debug.log: </h3>
+<p align="center"><img width="972" height="547" alt="image" src="https://github.com/user-attachments/assets/874a177c-64a7-42c7-99b4-7c27d627fb8a" /></p>
+
+<h3>Error.log: </h3>
+<p align="center"><img width="1550" height="713" alt="image" src="https://github.com/user-attachments/assets/0447fede-2918-4556-93a6-1b0de86e99c9" /></p>
 
 ## Vantagens:
 
