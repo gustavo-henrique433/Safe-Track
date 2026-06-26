@@ -103,6 +103,15 @@ docker-compose up --build
 <h3>Modelo 3D:</h3>
 <p align="center"><img width="600" height="400" alt="modelo 3d PCB" src="https://github.com/user-attachments/assets/10275aa7-3860-4530-893d-9b7d117c5b16" /></p>
 
+## Protocolo de comunicação ESP32 - API:
+
+<p> O envio de dados coletados pelos sensores conectados ao ESP32 eram feitos através de HTTP onde  era enviado um Payload JSON, porém a ultilização deste protocolo acarreta em lentidão e ineficiência por conta do alto consumo de memoria RAM, por conta disto foi realizado a migração para o protocolo MQTT.  </p>
+<p align = "center"><img width="1280" height="326" alt="image" src="https://github.com/user-attachments/assets/b0e748cf-82e0-4766-aa46-0b314c021228" /></p>
+
+<h3>Beneficios: </h3>h
+<p> O MQTT foi criado especificamente como protocolo de comunicação para sistemas embarcados e IOT, onde prioriza eficiência, rapidez e baixo consumo de energia e recursos, onde o responsavél pelo envio dos dados coletados passará a ser de responsabilidade de um Broker no caso o mosquitto que irá captador os dados do ESP32 e envia-lo a rota da API, assim que a API termiana o processamento dos dados ela retorna uma confirmação de erro ou sucesso,  esse FeedBack é repassado ao ESP32 pelo Broker. </p>
+<p>Isso permite que a arquitetura de comunicação IOT se torne assincrona e desaclopada uma vez que agora o mosquitto é responsavel pelo envio dos dados e o ESP32 está livre para continuar lendo e administrando outros sensores, além da diminuição da ultilização de recursos do embarcado. </p>p
+
 ## Acompanhando funcionamento:
 
 <p>Para acompanhar a API em tempo real basta acessar Localhost ou IP da VM +  :5001 que é a porta de acesso onde roda o front-end que exibe informações como status da API e do ESP32 assim como seu IP</p>
@@ -131,7 +140,6 @@ docker-compose up --build
 
 ## Futuras atualizações:
 
-<p>- Sistema de Log's: Maior controle e segurança das ações realizadas pelos usuário; </p>
 <p>- Autenticação de dois fatores: Ultilizar o Gmail como sisema SMTP para envio de códigos de acesso; </p>
 <p>- Mudança de protocolo: Alterar a comunicação http entre o sistema embarcado e a API, onde pássara a ser feita por um Broker MQQT mosquito,      desaclopando assim o ESP32 e aumentando a velocidade de envio de informações, isto se deve pelo fato de o MQQT ser mais leve que HTTP; </p>
 <p>- Implementação de testes com o Pytest.</p>
