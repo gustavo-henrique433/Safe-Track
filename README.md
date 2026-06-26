@@ -9,7 +9,7 @@
 ## O que é:
 
 <p>
-Safe-Track é um projeto desenvolvido por alunos do 4° semestre de ADS da Fatec Campinas com o objetivo de proporcionar segurança e automação de patrimonios e ambientes.
+Safe-Track é um projeto desenvolvido por alunos do 4° semestre de ADS da Fatec Campinas com o objetivo de proporcionar segurança e automação de patrimonios e ambientes, através da ultilização de sistemas embarcados, possibilitando maior autonomia, confiança e baixo-custo.
 </p>
 
 ---
