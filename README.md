@@ -54,6 +54,7 @@ Safe-Track é um projeto desenvolvido por alunos do 4° semestre de ADS da Fatec
 <p>/app: É onde está o Back-end e Front-End do projeto e contém pastas como as rotas da API, Statics e Templates em que fica localizado todo o front-end</p>
 <p>routes: É o diretorio que contém todas as rotas Flask da API</p>
 <p>/database: Banco de dados do sistema e contém arquivos como como Hermes.db  e model.py</p>
+<p>/logs: Local que contém as configurações dos Log's</p>
 
 
 ## Como subir o ambiente:
