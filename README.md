@@ -141,6 +141,14 @@ docker-compose up --build
 <h3>Error.log: </h3>
 <p align="center"><img width="1550" height="713" alt="image" src="https://github.com/user-attachments/assets/0447fede-2918-4556-93a6-1b0de86e99c9" /></p>
 
+## Segurança:
+
+### Tokens JWT:
+
+### Hierarquia de acessos: 
+
+### Autenticação ESP32 via MAC: 
+
 ## Vantagens:
 
 <p>- A ultilização de docker para a programação do sistema permitiu a elaboração de um algoritmo, rapido e leve onde não é necessario a ultilização de computadores potentes;</p>
