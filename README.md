@@ -141,13 +141,19 @@ docker-compose up --build
 <h3>Error.log: </h3>
 <p align="center"><img width="1550" height="713" alt="image" src="https://github.com/user-attachments/assets/0447fede-2918-4556-93a6-1b0de86e99c9" /></p>
 
-## Segurança:
+## Segurança: (A terminar)
 
-### Tokens JWT:
+<h3>Tokens JWT: </h3>
+<p> </p>
+  
+<h3>Hierarquia de acessos: </h3>
+<p> Diferentes niveis de usuarios no qual cada um possui permissões de acesso e ações especificas dentro do sistema
+</p>
+  
 
-### Hierarquia de acessos: 
-
-### Autenticação ESP32 via MAC: 
+<h3>Autenticação ESP32 via MAC: </h3>
+<p> </p>
+  
 
 ## Vantagens:
 
