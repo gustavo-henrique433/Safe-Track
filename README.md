@@ -55,9 +55,8 @@ Safe-Track é um projeto com o objetivo de proporcionar segurança e automação
 <p>/src: É divido em outros dois subdiretorios sendo estes /app e /database </p>
 <p>/documents: Guarda documentos como diagramas do projeto</p>
 <p>/Logs:Arquivos de Logs gerados durante o funcionamento da API</p>
-<p>Static: Uploads de Imagens</p>
-<p>tests: Arquivos de testes unitarios usando o Framework Pytest </p>
-<br> </br>
+<p>/static: Uploads de Imagens</p>
+<p>/tests: Arquivos de testes unitarios usando o Framework Pytest </p>
 
 <p>/app: É onde está o Back-end e Front-End do projeto e contém pastas como as rotas da API, Statics e Templates em que fica localizado todo o front-end</p>
 <p>routes: É o diretorio que contém todas as rotas Flask da API</p>
