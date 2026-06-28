@@ -16,12 +16,13 @@ Safe-Track é um projeto com o objetivo de proporcionar segurança e automação
 
 ## Tecnologias:
 
-- Python + Flask
+- Python + Flask + SQLalchemy
 - Pytest
 - C++
 - JS + Tailwind CSS
-- Docker  
-- ESP32  
+- Docker + DockerCompose
+- ESP32
+- Protocolo MQTT
 - Sensor RFID RC522  
 - Cloud OpenStack  
 
