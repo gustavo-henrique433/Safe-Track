@@ -58,10 +58,19 @@ Safe-Track é um projeto com o objetivo de proporcionar segurança e automação
 <p>/static: Uploads de Imagens</p>
 <p>/tests: Arquivos de testes unitarios usando o Framework Pytest </p>
 
-<p>/app: É onde está o Back-end e Front-End do projeto e contém pastas como as rotas da API, Statics e Templates em que fica localizado todo o front-end</p>
-<p>routes: É o diretorio que contém todas as rotas Flask da API</p>
-<p>/database: Banco de dados do sistema e contém arquivos como como Hermes.db  e model.py</p>
-<p>/logs: Local que contém as configurações dos Log's</p>
+
+<h3>SRC</h3>
+<p>src/database: Banco de dados do sistema e contém arquivos como como Hermes.db  e model.py</p>
+<p>src/logs: Local que contém as configurações dos Log's</p>
+<p>src/services: DashBoards</p>
+<p>src/app: É onde está o Back-end e Front-End do projeto e contém pastas como as rotas da API, Statics e Templates em que fica localizado todo o front-end</p>
+<p>src/app/routes: É o diretorio que contém todas as rotas Flask da API</p>
+<p>src/app/services: Arquivos MQTT </p>
+<p>src/app/static: JavaScript</p>
+<p>src/app/templates: Tailwind + HTML</p>
+
+
+
 
 
 ## Como subir o ambiente:
