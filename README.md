@@ -31,7 +31,7 @@ Safe-Track é um projeto com o objetivo de proporcionar segurança e automação
 
 <p>Sistema Linux nativo ou WSL com docker e docker-compose instalados</p>
 <p>Porta 5001 liberada para conexão com a API</p>
-<p>IDE para sistemas embarcados como arduibo IDE</p>
+<p>IDE para sistemas embarcados como arduino IDE</p>
 <p>Micro-controlador ESP32</p>
 
 ---
@@ -53,6 +53,12 @@ Safe-Track é um projeto com o objetivo de proporcionar segurança e automação
 <p>/docker: É onde se localiza os arquivos DockerFile e Docker-compose necessarios para a montagem e funcionamento do container</p>
 <p>/core: Local onde está o código C++ que rege o funcionamento do ESP32</p>
 <p>/src: É divido em outros dois subdiretorios sendo estes /app e /database </p>
+<p>/documents: Guarda documentos como diagramas do projeto</p>
+<p>/Logs:Arquivos de Logs gerados durante o funcionamento da API</p>
+<p>Static: Uploads de Imagens</p>
+<p>tests: Arquivos de testes unitarios usando o Framework Pytest </p>
+<br> </br>
+
 <p>/app: É onde está o Back-end e Front-End do projeto e contém pastas como as rotas da API, Statics e Templates em que fica localizado todo o front-end</p>
 <p>routes: É o diretorio que contém todas as rotas Flask da API</p>
 <p>/database: Banco de dados do sistema e contém arquivos como como Hermes.db  e model.py</p>
@@ -111,6 +117,7 @@ docker-compose up --build
 
 <p> O envio de dados coletados pelos sensores conectados ao ESP32 eram feitos através de HTTP onde  era enviado um Payload JSON, porém a ultilização deste protocolo acarreta em lentidão e ineficiência por conta do alto consumo de memoria RAM, por conta disto foi realizado a migração para o protocolo MQTT.  </p>
 <p align = "center"><img width="1280" height="326" alt="image" src="https://github.com/user-attachments/assets/b0e748cf-82e0-4766-aa46-0b314c021228" /></p>
+
 
 <h3>Beneficios: </h3>
 <p> O MQTT foi criado especificamente como protocolo de comunicação para sistemas embarcados e IOT, onde prioriza eficiência, rapidez e baixo consumo de energia e recursos, em que o responsavél pelo envio dos dados coletados passará a ser de responsabilidade de um Broker no caso o mosquitto que irá captar os dados do ESP32 e envia-lo a rota da API, assim que a API termina o processamento dos dados este retorna uma confirmação de erro ou sucesso, o FeedBack é repassado ao ESP32 pelo Broker. </p>
