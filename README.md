@@ -49,7 +49,7 @@ Safe-Track é um projeto com o objetivo de proporcionar segurança e automação
 
 <p  align = "center"> <img width="400" height="600" alt="diretorios" src="https://github.com/user-attachments/assets/6eb1be84-0201-4d2c-850b-faebd769b3c0" /></p>
 
-<p>Na raiz do projeto se encontram três diretorios principais que contém o cerebro do projeto</p>
+<p>Na raiz do projeto se encontram sete diretorios principais que contém o cerebro do projeto</p>
 <p>/docker: É onde se localiza os arquivos DockerFile e Docker-compose necessarios para a montagem e funcionamento do container</p>
 <p>/core: Local onde está o código C++ que rege o funcionamento do ESP32</p>
 <p>/src: É divido em outros dois subdiretorios sendo estes /app e /database </p>
