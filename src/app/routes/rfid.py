@@ -3,7 +3,7 @@ from flask_jwt_extended import create_access_token, jwt_required, get_jwt_identi
 from flask_login import login_user
 from werkzeug.security import generate_password_hash, check_password_hash
 from app.config.extensions import db
-from src.database.models import User, Root, RFID, Object
+from src.database.models import User, Root, RFID, Object, Esp32_registro
 from flask_socketio import emit # Importação necessária
 import time
 
@@ -16,39 +16,49 @@ def receber_dados():
 
     global ultimo_contato_esp
 
-    data =  request.get_json()
+    data = request.get_json()
 
     if not data:
         return jsonify({'error': 'JSON inválido'}), 400
 
     uid = data.get('uid')
     date = data.get('date')
+    mac_adress = data.get('mac_adress')
 
-    tag_verificar = RFID.query.filter_by(uid = uid).first()
+    tag_verificar = RFID.query.filter_by(uid=uid).first()
+    verificar_esp = Esp32_registro.query.filter_by(mac=mac_adress).first()
+
+    if not verificar_esp:
+        return jsonify({'message': 'Permissão negada !!'}), 403
  
     if not tag_verificar:
-	    rfid_registrado = RFID(uid = uid, date=date)
-	    db.session.add(rfid_registrado)
-	    db.session.commit()
-	    mensagem = 'Tag RFID cadastrada !!'
-
+        rfid_registrado = RFID(uid=uid, date=date)
+        db.session.add(rfid_registrado)
+        db.session.commit()
+        mensagem = 'Tag RFID cadastrada !!'
     else:
-	    mensagem = 'Tag já cadastrada !!'
+        mensagem = 'Tag já cadastrada !!'
 
-    objeto_vinculado = Object.query.filter_by(id_rfid =uid).first()	
+    objeto_vinculado = Object.query.filter_by(id_rfid=uid).first() 
+    usuario_vinculado = User.query.filter_by(credencial_rfid=uid).first()
   
     ultimo_contato_esp = time.time()
-    ip_esp = request.remote_addr	
+    ip_esp = request.remote_addr    
+
+    status_tag = 'livre'
+    if objeto_vinculado:
+        status_tag = 'objeto'
+    elif usuario_vinculado:
+        status_tag = 'usuario'
 
     emit('rfid_update', {
-	
         'message': mensagem,
         'uid': uid,
-	    'ip': ip_esp,
-	    'tem_objeto': True if objeto_vinculado else False
+        'ip': ip_esp,
+        'status': status_tag
     }, namespace='/', broadcast=True)  
 
-    return jsonify({'message': 'Leitura processada !!'}), 200 	 
+    return jsonify({'message': 'Leitura processada !!'}), 200
 
 @rfid_bp.route('/excluir_rfid', methods=['DELETE'])      
 @jwt_required()
@@ -90,7 +100,7 @@ def excluir_rfid():
         db.session.rollback()
         return jsonify ({'error': f'Erro ao apagar do banco: {str(e)}'}), 500    
 
-@rfid_bp.route('/vizualizar_todos_rfid', methods =['GET'])
+@rfid_bp.route('/vizualizar_todos_rfid', methods=['GET'])
 def listar_todos_rfid():
 
     todos_rfid = RFID.query.all()
@@ -98,13 +108,23 @@ def listar_todos_rfid():
 
     for rfid in todos_rfid:
         objeto_encontrado = Object.query.filter_by(id_rfid=rfid.uid).first()
-        
-        nome_objeto = objeto_encontrado.nome if objeto_encontrado else "Tag Livre"
+        individuo_encontrado = User.query.filter_by(credencial_rfid=rfid.uid).first()
+
+        nome = "Tag Livre"
+        tipo = "livre"
+
+        if objeto_encontrado:
+            nome = objeto_encontrado.nome
+            tipo = "objeto"
+        elif individuo_encontrado:
+            nome = individuo_encontrado.nome
+            tipo = "usuario"
 
         dado_rfid = {
             'uid': rfid.uid,
-            'date': rfid.date,
-            'objeto_cadastrado': nome_objeto 
+            'date': rfid.date, 
+            'objeto_cadastrado': nome,
+            'tipo': tipo
         }
 
         lista_rfids.append(dado_rfid)
@@ -131,6 +151,8 @@ def buscar_rfid(uid_rfid):
             'data de criação': rfid_encontrado.date
         }
     }), 200
+
+
     
 
  

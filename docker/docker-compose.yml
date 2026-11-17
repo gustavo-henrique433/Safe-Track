@@ -14,3 +14,4 @@ services:
       FLASK_APP: app.routes.app
       FLASK_DEBUG: 1
       PYTHONPATH: /app/src
+      TZ: America/Sao_Paulo

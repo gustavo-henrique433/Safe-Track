@@ -7,3 +7,4 @@ Celery
 flask-cors
 flask-socketio
 eventlet
+Flask-MQTT

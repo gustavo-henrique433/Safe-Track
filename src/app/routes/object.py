@@ -5,7 +5,7 @@ from flask import request
 from flask import send_from_directory
 from werkzeug.security import generate_password_hash, check_password_hash
 from app.config.extensions import db
-from src.database.models import User, Root, RFID, Object, Local
+from src.database.models import User, Root, RFID, Object, Local, Historico_patrimonio
 from flask_socketio import emit # Importação necessária
 from werkzeug.utils import secure_filename
 import time
@@ -200,16 +200,37 @@ def buscar_objeto_id(id_objeto):
     
     objeto_encontrado = Object.query.filter_by(id = id_objeto).first()
 
-    if not objeto_encontrado:
-        return jsonify ({'message': 'Este objeto não existe ou ID invalido !!'}), 404
+    try:
+        if not objeto_encontrado:
+            objeto_nao_encontrado = Historico_patrimonio(
+                id_objeto = None,
+                id_usuario = None,
+                acao = "buscar_objeto_id", 
+                status_tentativa = "falha"
+            )
 
-    url_completa = None
-    if objeto_encontrado.url_imagem:
-        url_completa = f"{request.host_url}{objeto_encontrado.url_imagem}"    
+            db.session.add(objeto_nao_encontrado)
+            db.session.commit()
 
-    return jsonify({
-        'message': 'Objeto encontrado com sucesso!',
-        'objeto': {
+            return jsonify({'message': 'Este objeto não existe ou ID invalido !!'}), 404
+
+        url_completa = None
+        if objeto_encontrado.url_imagem:
+            url_completa = f"{request.host_url}{objeto_encontrado.url_imagem}"       
+
+        objeto_encontrado_historico = Historico_patrimonio(
+                id_objeto = objeto_encontrado.id,
+                id_usuario = None,
+                acao = "buscar_objeto_id", 
+                status_tentativa = "sucesso"
+        )
+        db.session.add(objeto_encontrado_historico)
+        db.session.commit()
+
+
+        return jsonify({
+            'message': 'Objeto encontrado com sucesso!',
+            'objeto': {
             'id': objeto_encontrado.id,
             'nome': objeto_encontrado.nome,
             'descricao': objeto_encontrado.descricao,
@@ -218,8 +239,11 @@ def buscar_objeto_id(id_objeto):
             'url_imagem': url_completa,
             'id_rfid': objeto_encontrado.id_rfid
         }
-    }), 200
+        }), 200
 
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'message': 'Erro interno no servidor ao registrar historico de patrimonio.'}), 500    
 
 
 @object_bp.route('/buscar_objeto_uid/<string:uid_objeto>', methods=['GET']) 
@@ -227,29 +251,85 @@ def buscar_objeto_uid(uid_objeto):
 
     uid_encontrado = Object.query.filter_by(id_rfid = uid_objeto).first()
 
-    if not uid_encontrado:
-        return jsonify ({'message': 'Nenhum Objeto encontrado com esse UID !!'}), 404
+    try:
+        if not uid_encontrado:
+            objeto_nao_encontrado = Historico_patrimonio(
+                id_objeto = None,
+                id_usuario = None,
+                acao = "buscar_objeto_uid", 
+                status_tentativa = "falha"
+            )
 
-    url_completa = None
-    if uid_encontrado.url_imagem:
-        url_completa = f"{request.host_url}{uid_encontrado.url_imagem}"        
+            db.session.add(objeto_nao_encontrado)
+            db.session.commit()
 
-    return jsonify({
-        'message': 'Objeto encontrado com sucesso!',
-        'objeto': {
-            'id': uid_encontrado.id,
-            'nome': uid_encontrado.nome,
-            'descricao': uid_encontrado.descricao,
-            'especificacoes': uid_encontrado.especificacoes,
-            'id_lugar': uid_encontrado.id_lugar,
-            'url_imagem': url_completa,
-            'id_rfid': uid_encontrado.id_rfid
-        }
-    }), 200
+            return jsonify({'message': 'Este objeto não existe ou UID invalido !!'}), 404
 
+        url_completa = None
+        if uid_encontrado.url_imagem:
+            url_completa = f"{request.host_url}{uid_encontrado.url_imagem}"       
 
-    
+        nome_do_local = uid_encontrado.local_relacionado.endereco if uid_encontrado.local_relacionado else "Sem local"
 
+        objeto_encontrado_historico = Historico_patrimonio(
+            id_objeto = uid_encontrado.id,
+            id_usuario = None,
+            acao = "buscar_objeto_uid", 
+            status_tentativa = "sucesso"
+        )
+        
+        db.session.add(objeto_encontrado_historico)
+        db.session.commit()
+
+        return jsonify({
+            'message': 'Objeto encontrado com sucesso!',
+            'objeto': {
+                'id': uid_encontrado.id,
+                'nome': uid_encontrado.nome,
+                'descricao': uid_encontrado.descricao,
+                'especificacoes': uid_encontrado.especificacoes,
+                'id_lugar': nome_do_local,
+                'url_imagem': url_completa,
+                'id_rfid': uid_encontrado.id_rfid
+            }
+        }), 200
+
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'message': 'Erro interno no servidor ao registrar historico de patrimonio.'}), 500
+
+@object_bp.route('/buscar_objeto_nome/<string:nome_objeto>', methods=['GET']) 
+def buscar_objeto_nome(nome_objeto):
+    try:
+        termo = f"%{nome_objeto}%"
+        objetos_encontrados = Object.query.filter(Object.nome.like(termo)).all()
+
+        if not objetos_encontrados:
+            return jsonify ({'message': f'Nenhum Objeto encontrado contendo "{nome_objeto}" !!'}), 404
+
+        lista_objetos = []
+        for obj in objetos_encontrados:
+            url_completa = None
+            if obj.url_imagem:
+                url_completa = f"{request.host_url}{obj.url_imagem}"
+                
+            lista_objetos.append({
+                'id': obj.id,
+                'nome': obj.nome,
+                'descricao': obj.descricao,
+                'especificacoes': obj.especificacoes,
+                'id_lugar': obj.id_lugar,
+                'url_imagem': url_completa,
+                'id_rfid': obj.id_rfid
+            })
+
+        return jsonify({
+            'message': 'Objetos encontrados com sucesso!',
+            'objetos': lista_objetos 
+        }), 200
+
+    except Exception as e:
+        return jsonify({'message': f'Erro no servidor ao buscar: {str(e)}'}), 500
 
 
 

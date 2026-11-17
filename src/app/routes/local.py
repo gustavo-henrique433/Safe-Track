@@ -21,7 +21,7 @@ def cadastrar_local():
     data = request.get_json()
 
     if not data:
-        return jsonify({'message': 'Formato de dado invalido !!'})       
+        return jsonify({'message': 'Formato de dado invalido !!'}),  400      
 
     endereco  = data.get('endereco')
     descricao = data.get('descricao')    
