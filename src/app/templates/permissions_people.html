@@ -1,0 +1,37 @@
+<section class="st-permissions" id="st-person-permissions" aria-labelledby="st-person-title">
+    <h3 id="st-person-title">Permissões por pessoa</h3>
+    <p>Administração exclusiva de Root. Consulte uma conta ou visitante pelo ID para gerenciar o acesso a cada sala.</p>
+    <form id="st-person-search" class="st-permission-fields">
+        <label>ID da pessoa<input name="pessoa" type="number" min="1" step="1" required></label>
+        <button type="submit">Consultar pessoa</button>
+    </form>
+    <p id="st-person-message" role="status" aria-live="polite"></p>
+    <div id="st-person-detail" hidden>
+        <dl id="st-person-summary" class="st-permission-summary"></dl>
+        <p>Uma permissão vigente só libera o acesso quando a credencial também estiver apta. Para vincular um cartão, use “Vincular Cartão RFID” acima.</p>
+        <div class="st-permission-scroll" tabindex="0" role="region" aria-label="Permissões individuais">
+            <table><thead><tr><th>Sala</th><th>Início</th><th>Expiração</th><th>Permissão</th><th>Acesso agora</th><th>Ações</th></tr></thead><tbody id="st-person-rows"></tbody></table>
+        </div>
+        <div class="st-permission-pager">
+            <button type="button" id="st-person-prev" disabled>Anterior</button>
+            <span id="st-person-page"></span>
+            <button type="button" id="st-person-next" disabled>Próxima</button>
+        </div>
+        <h4>Conceder ou editar autorização</h4>
+        <label>Sala<select id="st-permission-local"><option value="">Selecione uma sala…</option></select></label>
+        <p id="st-editor-message" role="status" aria-live="polite"></p>
+        <form id="st-permission-form" hidden>
+            <p id="st-editor-state"></p>
+            <p id="st-permission-timezone"></p>
+            <div class="st-permission-fields">
+                <label>Início (opcional)<input name="inicio" type="datetime-local" step="any"></label>
+                <label>Expiração (opcional)<input name="expiracao" type="datetime-local" step="any"></label>
+            </div>
+            <p>Campos vazios indicam ausência de limite individual. A validade global do visitante continua sendo exigida.</p>
+            <div class="st-permission-actions">
+                <button type="submit" id="st-permission-save" data-st-permission-write>Conceder autorização</button>
+                <button type="button" id="st-permission-reactivate" data-st-permission-write hidden>Reativar autorização</button>
+            </div>
+        </form>
+    </div>
+</section>

@@ -1,0 +1,29 @@
+/* Componentes de permissões: estilos limitados às áreas de Pessoas e Locais. */
+.st-permissions { background:#1f2937; border:1px solid #374151; border-radius:12px; padding:1.25rem; color:#d1d5db; min-width:0; }
+.st-permissions [hidden] { display:none !important; }
+.st-permissions h3 { font-size:1.125rem; font-weight:700; color:#fff; }
+.st-permissions h4 { font-weight:700; color:#fff; margin-top:1.25rem; }
+.st-permissions p { margin:.75rem 0; font-size:.875rem; line-height:1.5; }
+.st-permissions label { display:flex; flex-direction:column; gap:.4rem; font-size:.875rem; min-width:0; }
+.st-permissions input,.st-permissions select { width:100%; background:#111827; border:1px solid #4b5563; border-radius:6px; padding:.6rem; color:#f3f4f6; color-scheme:dark; min-width:0; }
+.st-permissions button { background:#1e40af; border:1px solid #3b82f6; border-radius:6px; padding:.55rem .8rem; color:#fff; font-size:.875rem; cursor:pointer; }
+.st-permissions button:hover { background:#1e3a8a; }
+.st-permissions button:disabled { opacity:.45; cursor:default; }
+.st-permissions :is(button,input,select,.st-permission-scroll):focus-visible { outline:2px solid #93c5fd; outline-offset:3px; }
+.st-permission-fields { display:flex; align-items:flex-end; gap:1rem; flex-wrap:wrap; margin-top:1rem; }
+.st-permission-fields label { flex:1 1 12rem; }
+.st-permission-actions,.st-permission-pager { display:flex; align-items:center; flex-wrap:wrap; gap:.75rem; margin-top:1rem; }
+.st-permission-pager { justify-content:space-between; font-size:.875rem; }
+.st-permission-summary { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,13rem),1fr)); gap:1rem; border-top:1px solid #374151; padding-top:1rem; }
+.st-permission-summary dt { color:#9ca3af; font-size:.8rem; }
+.st-permission-summary dd { color:#fff; margin-top:.25rem; overflow-wrap:anywhere; }
+.st-permission-scroll { width:100%; overflow-x:auto; border:1px solid #374151; border-radius:8px; margin-top:1rem; }
+.st-permissions table { width:100%; font-size:.875rem; text-align:left; border-collapse:collapse; }
+.st-permissions th { background:#111827; color:#9ca3af; font-weight:600; white-space:nowrap; }
+.st-permissions :is(th,td) { padding:.75rem; border-bottom:1px solid #374151; vertical-align:top; }
+.st-permissions td { min-width:7rem; max-width:24rem; overflow-wrap:anywhere; }
+.st-permissions td button { margin:0 .4rem .4rem 0; white-space:nowrap; }
+.st-permissions [data-state=error] { color:#fca5a5; }
+.st-permissions [data-state=success] { color:#6ee7b7; }
+.st-permissions [aria-busy=true] { opacity:.7; }
+@media(max-width:600px) { .st-permissions { padding:1rem; } .st-permission-fields { flex-direction:column; align-items:stretch; } .st-permission-fields label { flex:auto; } }

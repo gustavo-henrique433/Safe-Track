@@ -1,0 +1,239 @@
+SAFE-TRACK — PROPOSTA DA ETAPA 2: PERFIL VISITANTE
+============================================================
+
+Data: 17/11/2026 (America/Sao_Paulo).
+Branch: desenvolvimento. Referência original: 08990a2.
+Situação: proposta para aprovação; implementação ainda não iniciada.
+
+ATUALIZAÇÃO — opção A aprovada pelo responsável em 17/11/2026, com a
+condição de preservar a lógica e os contratos existentes. O texto abaixo
+fica como registro da proposta anterior à implementação. O resultado
+atual está documentado em documents/etapa2_visitantes.txt.
+
+1. OBJETIVO E ESCOPO
+
+Implementar um único perfil denominado visitante, administrado por Root,
+com RFID associado, início/expiração e locais previamente autorizados.
+
+O fluxo do ESP32 permanece o original: HTTP/MQTT, MAC cadastrado onde já
+é verificado, mesmos tópicos, campos, rotas e formatos de resposta.
+Nenhum token de dispositivo, certificado obrigatório, cabeçalho novo,
+serviço adicional ou mudança de firmware faz parte desta proposta.
+
+O pedido para avançar autoriza a Etapa 2. O documento de desenvolvimento
+controlado, itens 2.2 e 10, exige apresentação e aprovação específica das
+alterações estruturais antes da implementação. Esta é essa apresentação.
+
+2. ESTADO CONFERIDO
+
+- User e Root já usam herança SQLAlchemy por tipo_user.
+- Não existem campos de validade nem associação usuário/locais autorizados.
+- Registro_Acesso contém id, id_rfid, id_local, horario e status_tentativa.
+- Registro_Acesso não identifica o usuário que possuía a tag na tentativa.
+- /acessar_porta recebe uid_solicitante/local e consulta User ativo por UID.
+- /cadastrar_rfid verifica mac_adress cadastrado, sem token de dispositivo.
+- As operações administrativas de objetos/locais/Root verificam Root.
+- /registrar_usuario é público; algumas consultas e endpoints de dispositivo
+  também não usam JWT. Esse comportamento preexistente será preservado.
+- No momento da inspeção não havia contêiner ativo nem arquivo
+  src/database/hermes.db no checkout. Nenhum banco real foi aberto.
+
+3. PROPOSTA DE DADOS — SOMENTE TABELAS ADICIONAIS
+
+3.1 visitantes
+
+Finalidade: dados específicos do único novo perfil Visitante(User).
+
+  id          INTEGER, PK e FK para users.id
+  inicio      DATETIME, obrigatório, instante UTC
+  expiracao   DATETIME, obrigatório, instante UTC
+
+Restrição: inicio < expiracao.
+Discriminador de herança: tipo_user = visitante.
+
+Nome, e-mail, senha, credencial_rfid e status_conta serão os campos já
+herdados de User. Não serão duplicados ou alterados em users.
+A revogação usará status_conta=False para esse visitante.
+
+3.2 visitante_locais
+
+Finalidade: permitir um ou vários locais autorizados por visitante.
+
+  visitante_id  INTEGER, FK para visitantes.id
+  local_id      INTEGER, FK para local.id
+
+PK composta: visitante_id/local_id, impedindo pares repetidos.
+É uma associação de locais, não outro perfil de visitante.
+
+3.3 visitante_acessos
+
+Finalidade: vincular cada tentativa registrada ao visitante identificado
+naquela ocasião, sem modificar a tabela Registro_Acesso existente.
+
+  registro_id   INTEGER, PK e FK para registro_acesso.id
+  visitante_id  INTEGER, obrigatório, FK para visitantes.id
+
+Será criada somente para tentativas identificadas de visitantes. Dados
+como UID, local, horário e resultado continuam exclusivamente no registro
+original; não serão copiados para uma tabela de eventos alternativa.
+O vínculo e o registro serão gravados na mesma transação.
+
+Motivo: consultar apenas pela UID atual pode atribuir acessos de outra
+pessoa ao visitante depois de uma reassociação de RFID. Esse vínculo
+preserva a identidade registrada sem adicionar colunas às tabelas antigas.
+
+4. EFEITOS E PRESERVAÇÃO DO BANCO
+
+- Nenhuma tabela ou coluna existente será renomeada, excluída ou alterada.
+- User, Root, RFID, Object, Local e Esp32_registro mantêm seus campos.
+- O tipo atual de User.credencial_rfid não será modificado nesta etapa.
+- Não haverá tabela para autenticação de dispositivos ou novos tokens.
+- Não haverá reclassificação de registros históricos anteriores.
+- Não será executada migração ou inicialização no banco real.
+- Não será introduzido um sistema de migrações ou serviço de infraestrutura.
+
+O app.py original já chama db.create_all() durante o import. A inclusão
+dos modelos faria esse mecanismo criar as tabelas adicionais quando a
+aplicação real fosse iniciada. Durante o desenvolvimento, imports e testes
+serão isolados pelas fixtures da Etapa 1. A ativação no ambiente real deve
+ocorrer apenas após revisão e autorização do responsável.
+
+Limitação mantida: credencial_rfid é Integer referenciando uma UID textual.
+Conversões/ambiguidades de UIDs numéricas são preexistentes; não será feita
+correção automática de tipo, normalização ou reescrita de vínculos RFID.
+
+5. REGRAS PROPOSTAS PARA ACESSO
+
+- Usuário comum e Root continuam no caminho existente de decisão.
+- Para Visitante, conferir em cada tentativa:
+    conta ativa;
+    inicio <= horário atual < expiracao;
+    local solicitado entre os locais autorizados.
+- Credencial futura, expirada, revogada ou usada fora dos locais permitidos
+  recebe a resposta original de negação: HTTP 403 e abrir=False.
+- Sucesso mantém HTTP 200, abrir=True e a mensagem original da rota.
+- O ESP32 continua enviando os mesmos campos; não precisa de outro firmware.
+- Não é necessário agendamento para a expiração ter efeito.
+- A checagem de validade é feita no servidor, não apenas na interface.
+
+Registro_Acesso será usado nos mesmos pontos de persistência existentes.
+O vínculo visitante_acessos identifica o visitante nas tentativas registradas,
+inclusive nas negações por validade/local, quando o visitante é reconhecido.
+Solicitações que já retornam antes da gravação original, como local
+inexistente, não serão convertidas silenciosamente em um novo fluxo de logs.
+
+6. ADMINISTRAÇÃO PROPOSTA
+
+Novos endpoints, separados das URLs existentes:
+
+  POST /visitantes
+    Cadastro por Root: nome, email, senha, credencial_rfid, inicio,
+    expiracao e lista de IDs de locais autorizados.
+
+  GET /visitantes
+    Consulta administrativa e filtro de situação: ativo, agendado,
+    expirado ou revogado.
+
+  GET /visitantes/<id>
+    Dados e locais autorizados do visitante.
+
+  PUT /visitantes/<id>
+    Atualização administrativa dos dados específicos da autorização.
+
+  POST /visitantes/<id>/revogar
+    Desativação por Root, sem exclusão do usuário ou do histórico.
+
+  GET /visitantes/<id>/acessos
+    Registros associados àquele visitante, sem inferência pelo dono atual
+    da tag e com filtros administrativos simples.
+
+Esses endpoints exigirão o JWT de usuário e a verificação Root já usados
+na aplicação. Visitante não herda de Root e será recusado nas operações
+administrativas já protegidas por essa verificação.
+
+Datas dos endpoints novos terão formato ISO 8601 com fuso explícito e serão
+normalizadas para UTC. Timestamps/formatos de rotas antigas serão mantidos.
+O login e os JWTs existentes não serão substituídos. A regra temporal da
+credencial RFID será verificada independentemente da validade de um JWT.
+
+7. LIMITE DE PERMISSÕES QUE PRECISA FICAR EXPLÍCITO
+
+/registrar_usuario é público hoje. Preservar esse contrato significa que
+uma requisição anônima pode cadastrar um usuário comum. Nenhuma regra de
+perfil consegue distinguir um visitante que omite seu JWT de outro cliente
+anônimo nesse endpoint.
+
+A proposta mantém o contrato público original e restringe por Root os
+novos endpoints administrativos e as operações já protegidas. Não será
+afirmado que o perfil visitante elimina o acesso anônimo às rotas públicas.
+Restringir globalmente o cadastro de usuários ou os endpoints de dispositivo
+seria outra alteração de contrato e exige autorização separada.
+
+8. ARQUIVOS ENVOLVIDOS, SE A PROPOSTA FOR APROVADA
+
+Modificar:
+  src/database/models.py
+    Adicionar os modelos/associações de visitante descritos acima.
+  src/app/routes/control_door.py
+    Acrescentar somente a validação específica de Visitante e o vínculo
+    de histórico, preservando campos e respostas do fluxo existente.
+  src/app/routes/app.py
+    Apenas importar e registrar o blueprint novo.
+  src/app/tests/conftest.py
+    Acrescentar fixtures fictícias de visitantes.
+  src/app/tests/test_models.py
+    Continuar verificando as tabelas/colunas originais e permitir somente
+    as três tabelas de visitante aprovadas, sem retirar asserções de proteção.
+
+Criar:
+  src/app/routes/visitors.py
+    Administração de visitantes por Root usando Flask/SQLAlchemy existentes.
+  src/app/tests/test_visitors.py
+    Casos do perfil e das credenciais temporárias.
+  documents/etapa2_visitantes.txt
+    Relatório de implementação, testes e limites, após a etapa.
+
+Não há necessidade de nova biblioteca Python para essa proposta.
+Front-end e dashboards ficam nas etapas posteriores do documento.
+
+9. TESTES PLANEJADOS
+
+- Cadastro por Root e negação para usuário comum/visitante.
+- Validação dos campos novos, período, RFID e locais existentes.
+- Um único perfil visitante, sem permissões Root.
+- Credencial válida, agendada, expirada e revogada.
+- Acesso em local autorizado e não autorizado.
+- Expiração verificada a cada leitura, sem scheduler.
+- Registros liberados/negados vinculados ao visitante correto.
+- Histórico preservado depois de reassociação da tag.
+- Rollback se houver falha na gravação do registro/vínculo.
+- Regressão dos fluxos HTTP/MQTT originais sem token de dispositivo.
+- Reexecução da suíte da Etapa 1, sem ocultar suas dez falhas existentes.
+
+As dez falhas anteriores continuam pendentes de decisão própria; esta etapa
+não será usada para corrigi-las sem autorização.
+
+10. ALTERNATIVAS
+
+A) Três tabelas adicionais, conforme a proposta acima.
+   Preserva tabelas antigas e registra a identidade do visitante em cada
+   tentativa nova sem duplicar os dados do evento. Opção recomendada para
+   o histórico administrativo solicitado.
+
+B) Somente visitantes e visitante_locais, consultando histórico pela UID.
+   Menos uma tabela, mas não garante atribuição correta do histórico após
+   reassociação de RFID. Teria de ser apresentado como histórico da tag,
+   e não histórico imutável do visitante.
+
+C) Adicionar campos às tabelas users/registro_acesso existentes.
+   Evita parte das associações, mas modifica o esquema legado e exige
+   transformação estrutural de tabelas antigas. Não é a opção recomendada
+   diante da prioridade de preservação.
+
+11. APROVAÇÃO NECESSÁRIA
+
+A implementação desta proposta depende de aprovação da opção A, incluindo
+as três tabelas aditivas e as verificações específicas do novo perfil.
+O comportamento público preexistente descrito no item 7 será preservado.
+Nenhum arquivo da aplicação, modelo ou banco foi alterado para preparar
+este documento. Somente esta proposta foi acrescentada.

@@ -10,6 +10,8 @@
     <!--<link rel="icon" href="logo_ic_favicon.png-->
     <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/bodymovin/5.12.2/lottie.min.js"></script>
+    <link rel="stylesheet" href="{{ url_for('static', filename='admin.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='permissions.css') }}">
 
     <script>
         tailwind.config = {
@@ -187,6 +189,14 @@
                         Acessar Tags <i class="fa-solid fa-arrow-right ml-1"></i>
                     </div>
                 </div>
+                <button type="button" data-safe-track-admin hidden onclick="mudarAba('visitantes')" class="hidden bg-gray-800 text-left rounded-xl shadow-lg border border-gray-700 border-t-4 border-t-purple-500 hover:-translate-y-1 transition-all overflow-hidden">
+                    <span class="block p-6"><i class="fa-solid fa-user-clock text-2xl text-purple-400 mb-4" aria-hidden="true"></i><span class="block text-lg font-bold text-gray-100">Visitantes</span><span class="block text-xs text-gray-400 mt-1">Credenciais temporárias e locais autorizados.</span></span>
+                    <span class="block bg-gray-900/50 p-3 text-center text-sm font-bold text-purple-400">Administrar Visitantes <i class="fa-solid fa-arrow-right ml-1" aria-hidden="true"></i></span>
+                </button>
+                <button type="button" data-safe-track-admin hidden onclick="mudarAba('relatorios')" class="hidden bg-gray-800 text-left rounded-xl shadow-lg border border-gray-700 border-t-4 border-t-emerald-500 hover:-translate-y-1 transition-all overflow-hidden">
+                    <span class="block p-6"><i class="fa-solid fa-chart-column text-2xl text-emerald-400 mb-4" aria-hidden="true"></i><span class="block text-lg font-bold text-gray-100">Indicadores e Relatórios</span><span class="block text-xs text-gray-400 mt-1">Acessos registrados, atividades e exportação CSV.</span></span>
+                    <span class="block bg-gray-900/50 p-3 text-center text-sm font-bold text-emerald-400">Consultar Indicadores <i class="fa-solid fa-arrow-right ml-1" aria-hidden="true"></i></span>
+                </button>
             </div>
         </section>
 
@@ -321,12 +331,13 @@
                 <div class="overflow-x-auto">
                     <table class="w-full text-left text-sm text-gray-300">
                         <thead class="bg-gray-900/80 text-gray-400 text-xs uppercase tracking-wider">
-                            <tr><th class="px-6 py-4">ID</th><th class="px-6 py-4">Nome</th><th class="px-6 py-4">E-mail</th><th class="px-6 py-4">Credencial (RFID)</th></tr>
+                            <tr><th class="px-6 py-4">ID</th><th class="px-6 py-4">Nome</th><th class="px-6 py-4">E-mail</th><th class="px-6 py-4">Credencial (RFID)</th><th class="px-6 py-4">Permissões</th></tr>
                         </thead>
                         <tbody id="tabela-usuarios" class="divide-y divide-gray-700 bg-gray-800"></tbody>
                     </table>
                 </div>
             </div>
+            {% include 'permissions_people.html' %}
         </section>
 
         <section id="aba-locais" class="secao-conteudo hidden fade-in space-y-6">
@@ -363,6 +374,7 @@
                     </table>
                 </div>
             </div>
+            {% include 'permissions_local.html' %}
         </section>
 
         <section id="sec-tags" class="secao-conteudo hidden fade-in space-y-6">
@@ -392,6 +404,7 @@
             </div>
         </section>
 
+        {% include 'admin.html' %}
     </main>
 
     <div id="modal-novo-local" class="fixed inset-0 bg-gray-900/90 z-[60] hidden flex items-center justify-center backdrop-blur-sm transition-opacity p-4">
@@ -484,14 +497,18 @@
         }
 
         window.mudarAba = function(id) {
+            if (window.SafeTrackAdmin && !window.SafeTrackAdmin.allowSection(id)) return;
             const targetId = id === 'tags' ? 'sec-tags' : `aba-${id}`;
             const secao = document.getElementById(targetId);
             if (secao) {
                 document.querySelectorAll('.secao-conteudo').forEach(el => el.classList.add('hidden'));
                 secao.classList.remove('hidden');
                 window.scrollTo(0,0);
+                if (window.SafeTrackAdmin) window.SafeTrackAdmin.open(id);
             }
         };
     </script>
+    <script src="{{ url_for('static', filename='admin.js') }}"></script>
+    <script src="{{ url_for('static', filename='permissions.js') }}"></script>
 </body>
 </html>

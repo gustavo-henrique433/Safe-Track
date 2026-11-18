@@ -1,0 +1,696 @@
+SAFE-TRACK — ETAPA 2: PERFIL VISITANTE
+============================================================
+
+Data: 17/11/2026 (America/Sao_Paulo).
+Branch: desenvolvimento. Referência do código original: 08990a2.
+
+1. ESCOPO E AUTORIZAÇÃO
+
+Implementação da opção A de documents/proposta_etapa2_visitantes.txt,
+aprovada pelo responsável com a condição de preservar a lógica existente.
+
+Foi criado um único perfil: visitante. Foram acrescentadas somente as três
+tabelas aprovadas, a administração desse perfil e sua verificação de acesso.
+As regras originais de usuário comum e Root, HTTP/MQTT e identificação do
+ESP32 por MAC foram preservadas. Não foram implementados tokens de dispositivo.
+
+As dez falhas da Etapa 1 continuam presentes e visíveis nos testes. Não houve
+correção incidental dessas falhas ou início de dashboards/front-end.
+
+2. ARQUIVOS MODIFICADOS E CRIADOS NESTA ETAPA
+
+Modificados:
+
+- src/database/models.py
+  Acrescenta Visitante, visitante_locais e VisitanteAcesso. As oito classes
+  preexistentes foram preservadas, incluindo campos, tipos, FKs e defaults.
+
+- src/app/routes/control_door.py
+  Acrescenta a checagem de período/local somente para Visitante e o vínculo
+  de seu histórico. As instruções originais permanecem; não houve refatoração
+  do fluxo de usuário comum/Root, payload ou formato de resposta.
+
+- src/app/routes/app.py
+  Acrescenta somente o import e o registro do blueprint de visitantes.
+  Configurações, inicialização, logger, callbacks e funções existentes
+  permaneceram iguais.
+
+- src/app/tests/conftest.py
+  Acrescenta uma factory de visitantes fictícios no ambiente isolado existente.
+
+- src/app/tests/test_models.py
+  Atualiza o teste de conjunto de tabelas para permitir exatamente as três
+  estruturas aprovadas e acrescenta dez casos de integridade específicos.
+  A proteção das tabelas antigas e das colunas mac/local de esp32_registro
+  foi mantida. O teste foi renomeado para refletir essa mudança aprovada;
+  não foram eliminadas ou relaxadas as verificações de integridade originais.
+
+- documents/proposta_etapa2_visitantes.txt
+  Acrescenta o registro de aprovação e a referência a este relatório.
+
+Criados:
+
+- src/app/routes/visitors.py
+  Administração de visitantes usando Flask, SQLAlchemy e JWT já existentes.
+- src/app/tests/test_visitors.py
+  126 casos de regras, permissões, validações, histórico e regressões.
+- documents/etapa2_visitantes.txt
+  Este relatório, com resultados e catálogo da execução atual.
+
+Nenhuma dependência nova foi necessária. requirements.txt,
+requirements-dev.txt, Docker, Compose, firmware, MQTT, logger, templates e
+JavaScript não foram modificados nesta etapa.
+
+3. ESTRUTURA DE DADOS IMPLEMENTADA
+
+visitantes:
+  id: PK e FK para users.id.
+  inicio: DATETIME obrigatório, armazenado como UTC sem offset.
+  expiracao: DATETIME obrigatório, armazenado como UTC sem offset.
+  CHECK: inicio < expiracao.
+  Discriminador: tipo_user = visitante.
+
+Nome, e-mail, senha, credencial_rfid e status_conta são herdados de User.
+Visitante herda de User, não de Root. Não existem categorias como
+visitante_local ou visitante_temporario.
+
+visitante_locais:
+  visitante_id: FK para visitantes.id.
+  local_id: FK para local.id.
+  PK composta visitante_id/local_id, sem repetição de pares.
+
+visitante_acessos:
+  registro_id: PK e FK para registro_acesso.id.
+  visitante_id: FK obrigatória para visitantes.id, com índice.
+
+O vínculo não duplica UID, horário, local ou resultado. Esses dados
+continuam no Registro_Acesso original. Um registro se vincula a um único
+visitante identificado naquela tentativa.
+
+Nenhuma coluna existente mudou de tipo. User.credencial_rfid continua
+Integer referenciando RFID.uid textual, conforme a arquitetura original.
+Há uma limitação herdada para UIDs numéricas: a associação pode ser lida
+como número e perder zeros na apresentação. Não foi criada coluna textual
+extra nem executada normalização de vínculos. O teste com 00001234 confirma
+o comportamento atual do campo e a leitura da mesma UID pelo fluxo original.
+
+4. REGRA DE ACESSO DO VISITANTE
+
+Em cada POST /acessar_porta, para Visitante são conferidos:
+  conta ativa;
+  inicio <= horário UTC atual < expiracao;
+  local solicitado entre os locais autorizados.
+
+Situações calculadas:
+  ativo: conta ativa, início alcançado e expiração ainda não alcançada.
+  agendado: conta ativa e início futuro.
+  expirado: conta ativa e expiração alcançada.
+  revogado: status_conta=False, independentemente do período.
+
+Não há atualização agendada de status: a regra é reavaliada a cada tentativa.
+O início é inclusivo; a expiração é exclusiva. Alterar os locais autorizados
+tem efeito na tentativa seguinte.
+
+O firmware envia exatamente o mesmo JSON:
+  {"uid_solicitante": "UID_EXISTENTE", "local": 1}
+
+As respostas continuam com message e abrir:
+  autorização: HTTP 200, abrir=True e mensagem original de abertura;
+  negação: HTTP 403, abrir=False e mensagem original de negação.
+
+Corpo vazio e local inexistente mantêm os retornos originais. Não foi
+acrescentado MAC, JWT, token ou cabeçalho obrigatório a /acessar_porta.
+Usuário comum e Root continuam com a decisão de acesso anterior, sem serem
+limitados pela lista de locais de um visitante.
+
+A leitura de identificação em /cadastrar_rfid continua autorizada pelo MAC
+cadastrado e mantém a resposta Leitura processada !!. Uma leitura de tag
+não equivale à autorização da porta: a identificação de uma tag de visitante
+expirado pode ser processada, mas seu acesso é negado em /acessar_porta.
+O evento rfid_update continua usando status usuario para a tag associada
+a Visitante, preservando os valores que o cliente original já recebia.
+
+5. HISTÓRICO E TRANSAÇÕES
+
+Tentativas de visitantes, autorizadas ou negadas por período/local/revogação,
+usam o Registro_Acesso existente e recebem um vínculo VisitanteAcesso.
+O registro é inserido, seu ID é obtido e o vínculo é incluído antes do mesmo
+commit. Falha de persistência provoca o rollback original e não libera a porta.
+
+O vínculo permite consultar o histórico do visitante correto mesmo depois
+que sua tag é reassociada e utilizada por outra pessoa. A consulta não deduz
+o dono antigo a partir do proprietário atual da UID.
+
+Não foram atribuídos retroativamente registros antigos a visitantes. Eventos
+sem vínculo não entram nessa consulta, mesmo que tenham a mesma UID.
+Solicitações que já retornam antes da persistência original, como local
+inexistente, continuam sem novo registro. Não foi implementada auditoria
+universal de todos os tipos de falha ou um novo sistema de logs/eventos.
+
+6. ENDPOINTS NOVOS
+
+Todos exigem o JWT de usuário já existente e um solicitante Root.
+Ausência de JWT retorna 401; usuário comum/visitante recebe 403.
+Senhas e hashes nunca são retornados pelos endpoints de visitantes.
+
+POST /visitantes
+  Campos: nome, email, senha, credencial_rfid, inicio, expiracao, locais.
+  Retorno de sucesso: 201, message e visitante.
+  A tag precisa existir e estar livre de outro usuário ou objeto.
+  Locais: lista de 1 a 100 IDs inteiros positivos, distintos e cadastrados.
+  Nome/e-mail: texto não vazio, até 100 caracteres.
+  Senha: texto não vazio, até 256 caracteres, armazenado com hash Werkzeug.
+  A regra de senha não foi estendida aos cadastros originais.
+  Período válido pode estar no passado, presente ou futuro; a situação e
+  a autorização são calculadas conforme o relógio do servidor.
+
+GET /visitantes
+  Filtros: status=ativo|agendado|expirado|revogado.
+  Paginação: pagina positiva; limite de 1 a 100, padrão 25.
+  Retorno: visitantes, total, pagina e limite.
+
+GET /visitantes/<id>
+  Retorno: visitante, incluindo período, situação e locais autorizados.
+  ID de usuário comum/Root ou inexistente retorna 404.
+
+PUT /visitantes/<id>
+  Campos editáveis: credencial_rfid, inicio, expiracao e locais.
+  É necessário fornecer ao menos um desses campos.
+  Dados são validados antes da atribuição; não há atualização parcial
+  quando há erro. Não permite trocar o perfil, senha, e-mail ou status_conta.
+  Retorno de sucesso: 200 e visitante atualizado.
+  Alteração de período/local não reativa uma conta revogada.
+
+POST /visitantes/<id>/revogar
+  Define status_conta=False. Operação repetida é idempotente.
+  Não exclui usuário, locais autorizados, RFID ou histórico.
+  Retorno de sucesso: 200, message e visitante.
+
+GET /visitantes/<id>/acessos
+  Retorno: visitante_id, total, pagina, limite e acessos.
+  Cada acesso contém id, id_rfid, id_local, horario e status_tentativa.
+  Filtros: inicio/fim em ISO 8601 com offset, local e resultado.
+  resultado: Liberado ou Negado. Intervalo: início inclusivo, fim exclusivo.
+  Paginação idêntica à listagem de visitantes.
+
+Somente os endpoints novos tratam seus erros de entrada localmente com
+400/404/409. O tratador global antigo não foi corrigido nesta etapa.
+Erros de banco retornam mensagem genérica e executam rollback.
+
+Exemplo de corpo, com dados fictícios e horários a ajustar:
+
+  {
+    "nome": "Visitante do laboratório",
+    "email": "visitante@example.test",
+    "senha": "Senha-ficticia-para-exemplo",
+    "credencial_rfid": "UID_JA_CADASTRADA_E_LIVRE",
+    "inicio": "2026-11-17T13:00:00-03:00",
+    "expiracao": "2026-11-17T18:00:00-03:00",
+    "locais": [1, 2]
+  }
+
+Datas sem offset são rejeitadas nas rotas novas. Instantes são normalizados
+para UTC e retornados com sufixo Z. Datas das rotas antigas não foram alteradas.
+Use o JWT de um Root existente em Authorization: Bearer <JWT_DO_ROOT>.
+Esse JWT é de administração humana; não é uma credencial nova para o ESP32.
+
+7. PERMISSÕES E LIMITAÇÕES PRESERVADAS
+
+Visitante é recusado nos endpoints administrativos já protegidos por Root,
+como cadastro/edição/exclusão de objetos, locais, associação de RFID e
+administração de usuários protegida. O login original pode emitir JWT para
+Visitante e retorna user_type=visitante. O mecanismo JWT não foi substituído;
+a validade física da credencial é conferida separadamente em cada acesso.
+
+Limitação aprovada: /registrar_usuario continua público, inclusive para uma
+requisição que informe JWT de visitante. Qualquer cliente pode omitir o JWT
+e usar esse cadastro anônimo. A nova autorização de perfil não fecha essa
+rota nem os demais endpoints públicos existentes.
+
+Assim, não se afirma que todas as operações públicas ficaram bloqueadas
+para uma pessoa visitante. Restringir essas rotas exigiria outra alteração
+de contrato e autorização separada. Essa condição foi apresentada antes
+da implementação e está coberta por um teste de regressão explícito.
+
+MAC permanece como identificação/autorização do dispositivo onde já era
+utilizado. A limitação de autenticidade desse identificador continua
+documentada; nenhum token/certificado adicional foi implementado.
+
+8. RESULTADOS REAIS DA EXECUÇÃO
+
+Suíte completa: 317 casos; 307 aprovados; 10 reprovados.
+Erros de coleta/execução: 0. Ignorados: 0. Avisos: 119, sem supressão.
+Tempo reportado pelo Pytest: 15,58 s. Código de saída: 1 pelas falhas anteriores.
+
+Casos novos: 136 aprovados, compostos por 126 em test_visitors.py e dez
+novos casos de integridade em test_models.py.
+
+Por arquivo:
+  test_access.py:     7 aprovados, 0 reprovados.
+  test_auth.py:      46 aprovados, 3 reprovados.
+  test_http.py:      10 aprovados, 4 reprovados.
+  test_inventory.py: 60 aprovados, 3 reprovados.
+  test_models.py:    32 aprovados, 0 reprovados.
+  test_mqtt.py:      26 aprovados, 0 reprovados.
+  test_visitors.py: 126 aprovados, 0 reprovados.
+
+Cobertura de linhas: 899/922 = 97,51%.
+Cobertura de ramos: 203/214 = 94,86%.
+Cobertura combinada: 97,01%.
+visitors.py: 100% das linhas/ramos medidos.
+control_door.py: 100% das linhas/ramos medidos.
+
+Cobertura inclui linhas executadas por testes reprovados; não comprova
+ausência de defeitos ou compatibilidade física com ESP32.
+
+Requisições medidas no cliente Flask: 272.
+Média: 11,519 ms. Mediana: 4,063 ms. P95: 114,611 ms. Máximo: 125,330 ms.
+São tempos em processo, com cobertura ativa e cenários variados; não são
+benchmark de produção ou latência física ESP32/broker/servidor.
+
+Os testes verificaram cadastro, consulta, edição, revogação, estados,
+limites exatos de validade, múltiplos locais, permissões, rollback,
+integridade, reassociação de RFID e comportamento original de leitura.
+Uma mudança controlada do relógio no teste demonstrou expiração sem
+alterar o banco e sem scheduler.
+
+9. COMPARAÇÃO COM A ETAPA 1 E PRESERVAÇÃO
+
+As dez falhas anteriores são exatamente as mesmas, comparadas por ID:
+  e-mail duplicado: retorna 500 em vez de 400;
+  token após logout: continua aceito;
+  cadastro de novo Root: retorna 500 em vez de 201;
+  quatro erros HTTP: 404/405/400/415 convertidos em 500;
+  três campos ausentes de local: retorno 200/500/500 em vez de 400.
+
+Nenhum novo caso reprovado foi introduzido. Não foram usados skip/xfail,
+supressão de falhas ou correções da API fora do escopo aprovado.
+Os relatórios da Etapa 1 continuam como registros daquela execução.
+
+Provas estáticas e de arquivos:
+  54 arquivos de produção monitorados; só três modificados conforme aprovado.
+  51 arquivos de produção fora desse escopo permaneceram idênticos por SHA-256.
+  Oito classes legadas idênticas por comparação de AST.
+  25 decoradores de rotas originais preservados.
+  Todas as funções originais de app.py idênticas por AST.
+  A função original de acesso foi comparada após retirar apenas os
+  acréscimos específicos de Visitante: instruções originais idênticas.
+  Nove arquivos de dados existentes preservados por inode/tamanho/mtime/ctime.
+  src/database/hermes.db continua ausente no checkout.
+  Nenhum arquivo de log criado em Logs/ ou src/Logs/ do checkout.
+
+Não houve execução de banco real, Docker/Compose, broker real, navegador,
+firmware ou hardware nesta etapa. Leituras de estado do Docker apenas
+confirmaram que não havia serviço ativo usando o checkout.
+MQTT externo usa os mocks existentes; Socket.IO continua testado em processo.
+
+Não houve commit, push ou mudança de branch.
+
+10. REPRODUZIR OS TESTES
+
+Da raiz do repositório, usando o ambiente virtual da Etapa 1:
+
+  .venv/bin/python -m pip check
+  .venv/bin/python -B -m pytest -q -p no:cacheprovider
+
+A suíte completa ainda termina com código de saída 1 devido às dez falhas
+preexistentes. Elas não foram corrigidas por esta autorização de visitantes.
+
+Para os testes específicos de visitantes:
+
+  .venv/bin/python -B -m pytest -q -p no:cacheprovider src/app/tests/test_visitors.py
+
+Para gerar os relatórios fora do checkout:
+
+  SAFE_TRACK_REPORT_DIR="$(mktemp -d /tmp/safe-track-etapa2.XXXXXX)"
+  COVERAGE_FILE="$SAFE_TRACK_REPORT_DIR/.coverage" .venv/bin/python -B -m pytest -q \
+    -p no:cacheprovider --cov --cov-report=term-missing \
+    --cov-report="xml:$SAFE_TRACK_REPORT_DIR/coverage.xml" \
+    --cov-report="json:$SAFE_TRACK_REPORT_DIR/coverage.json" \
+    --junitxml="$SAFE_TRACK_REPORT_DIR/junit.xml" \
+    --api-timings="$SAFE_TRACK_REPORT_DIR/api-timings.json"
+
+Artefatos desta execução: /tmp/safe-track-etapa2-x4uoh5mn
+  pytest-completo.txt
+  junit.xml
+  coverage.json / coverage.xml
+  api-timings.json
+  preservacao-e-regressao.json
+  pip-check.txt
+  requirements-tested.txt
+
+Artefatos em /tmp podem ser removidos pelo sistema. Os comandos permitem
+regenerar os relatórios. A geração deste documento não reexecutou a suíte.
+
+11. ATIVAÇÃO E PRÓXIMOS PASSOS
+
+Nenhuma migração ou criação de tabelas foi executada no banco real.
+O app.py original já usa db.create_all() no import. Quando o responsável
+iniciar a aplicação com os modelos novos, esse mesmo mecanismo poderá
+criar as três tabelas aditivas. Ele não altera as colunas antigas.
+
+Antes da ativação real, revisar e copiar consistentemente o banco existente.
+Esta implementação não criou um novo sistema de migrações ou de backup.
+Todos os ensaios foram feitos sob as fixtures que impedem abertura de
+banco fora do diretório temporário.
+
+O back-end do visitante está implementado. Interface de visitantes,
+dashboards e relatórios visuais pertencem às próximas etapas e não foram
+iniciados. A navegação/identidade visual atual permanece intacta.
+
+12. CATÁLOGO DA EXECUÇÃO ATUAL
+
+Cada linha abaixo corresponde a um caso do JUnit desta execução. A duração
+inclui preparação/execução/limpeza do caso, não uma única requisição HTTP.
+As descrições dos testes originais permanecem também no catálogo TXT da
+Etapa 1. Os nomes dos casos novos identificam o cenário parametrizado.
+
+CASO 001 | APROVADO | 1.316 s | src/app/tests/test_access.py::test_fluxo_original_da_porta_e_historico[credencial_valida]
+CASO 002 | APROVADO | 0.039 s | src/app/tests/test_access.py::test_fluxo_original_da_porta_e_historico[conta_inativa]
+CASO 003 | APROVADO | 0.032 s | src/app/tests/test_access.py::test_fluxo_original_da_porta_e_historico[credencial_desconhecida]
+CASO 004 | APROVADO | 0.031 s | src/app/tests/test_access.py::test_porta_sem_local_valido_nao_cria_evento[payload0-400]
+CASO 005 | APROVADO | 0.028 s | src/app/tests/test_access.py::test_porta_sem_local_valido_nao_cria_evento[payload1-404]
+CASO 006 | APROVADO | 0.029 s | src/app/tests/test_access.py::test_porta_sem_local_valido_nao_cria_evento[payload2-404]
+CASO 007 | APROVADO | 0.030 s | src/app/tests/test_access.py::test_falha_ao_persistir_acesso_nao_abre_porta
+CASO 008 | APROVADO | 0.139 s | src/app/tests/test_auth.py::test_login_dinamico[credenciais_validas]
+CASO 009 | APROVADO | 0.137 s | src/app/tests/test_auth.py::test_login_dinamico[senha_incorreta]
+CASO 010 | APROVADO | 0.136 s | src/app/tests/test_auth.py::test_login_dinamico[outra_senha_incorreta]
+CASO 011 | APROVADO | 0.024 s | src/app/tests/test_auth.py::test_login_dinamico[usuario_inexistente]
+CASO 012 | APROVADO | 0.023 s | src/app/tests/test_auth.py::test_login_dinamico[email_vazio]
+CASO 013 | APROVADO | 0.142 s | src/app/tests/test_auth.py::test_login_emite_jwt_com_identidade_e_expiracao[root]
+CASO 014 | APROVADO | 0.140 s | src/app/tests/test_auth.py::test_login_emite_jwt_com_identidade_e_expiracao[user]
+CASO 015 | APROVADO | 0.361 s | src/app/tests/test_auth.py::test_cadastro_publico_preserva_contrato_e_armazena_hash
+CASO 016 | APROVADO | 0.024 s | src/app/tests/test_auth.py::test_cadastro_incompleto_nao_persiste[vazio]
+CASO 017 | APROVADO | 0.020 s | src/app/tests/test_auth.py::test_cadastro_incompleto_nao_persiste[somente_nome]
+CASO 018 | APROVADO | 0.020 s | src/app/tests/test_auth.py::test_cadastro_incompleto_nao_persiste[sem_senha]
+CASO 019 | APROVADO | 0.020 s | src/app/tests/test_auth.py::test_cadastro_incompleto_nao_persiste[sem_nome]
+CASO 020 | REPROVADO | 0.027 s | src/app/tests/test_auth.py::test_cadastro_email_duplicado_deve_retornar_400
+  Diferença observada: assert 500 == 400
+CASO 021 | APROVADO | 0.025 s | src/app/tests/test_auth.py::test_permissoes_administrativas_existentes[None-401-post-/registrar_root]
+CASO 022 | APROVADO | 0.025 s | src/app/tests/test_auth.py::test_permissoes_administrativas_existentes[None-401-post-/atribuir_rfid_usuario]
+CASO 023 | APROVADO | 0.024 s | src/app/tests/test_auth.py::test_permissoes_administrativas_existentes[None-401-get-/visualizar_todos_usuarios]
+CASO 024 | APROVADO | 0.024 s | src/app/tests/test_auth.py::test_permissoes_administrativas_existentes[None-401-post-/cadastrar_objeto]
+CASO 025 | APROVADO | 0.025 s | src/app/tests/test_auth.py::test_permissoes_administrativas_existentes[None-401-put-/recadastrar_objeto]
+CASO 026 | APROVADO | 0.025 s | src/app/tests/test_auth.py::test_permissoes_administrativas_existentes[None-401-delete-/excluir_objeto]
+CASO 027 | APROVADO | 0.024 s | src/app/tests/test_auth.py::test_permissoes_administrativas_existentes[None-401-post-/cadastrar_local]
+CASO 028 | APROVADO | 0.025 s | src/app/tests/test_auth.py::test_permissoes_administrativas_existentes[None-401-put-/editar_local]
+CASO 029 | APROVADO | 0.024 s | src/app/tests/test_auth.py::test_permissoes_administrativas_existentes[None-401-delete-/excluir_rfid]
+CASO 030 | APROVADO | 0.027 s | src/app/tests/test_auth.py::test_permissoes_administrativas_existentes[user-403-post-/registrar_root]
+CASO 031 | APROVADO | 0.026 s | src/app/tests/test_auth.py::test_permissoes_administrativas_existentes[user-403-post-/atribuir_rfid_usuario]
+CASO 032 | APROVADO | 0.026 s | src/app/tests/test_auth.py::test_permissoes_administrativas_existentes[user-403-get-/visualizar_todos_usuarios]
+CASO 033 | APROVADO | 0.026 s | src/app/tests/test_auth.py::test_permissoes_administrativas_existentes[user-403-post-/cadastrar_objeto]
+CASO 034 | APROVADO | 0.026 s | src/app/tests/test_auth.py::test_permissoes_administrativas_existentes[user-403-put-/recadastrar_objeto]
+CASO 035 | APROVADO | 0.026 s | src/app/tests/test_auth.py::test_permissoes_administrativas_existentes[user-403-delete-/excluir_objeto]
+CASO 036 | APROVADO | 0.026 s | src/app/tests/test_auth.py::test_permissoes_administrativas_existentes[user-403-post-/cadastrar_local]
+CASO 037 | APROVADO | 0.026 s | src/app/tests/test_auth.py::test_permissoes_administrativas_existentes[user-403-put-/editar_local]
+CASO 038 | APROVADO | 0.026 s | src/app/tests/test_auth.py::test_permissoes_administrativas_existentes[user-403-delete-/excluir_rfid]
+CASO 039 | APROVADO | 0.023 s | src/app/tests/test_auth.py::test_jwt_invalido_nao_acessa_rota_protegida[expired-401]
+CASO 040 | APROVADO | 0.021 s | src/app/tests/test_auth.py::test_jwt_invalido_nao_acessa_rota_protegida[malformed-422]
+CASO 041 | APROVADO | 0.023 s | src/app/tests/test_auth.py::test_jwt_invalido_nao_acessa_rota_protegida[wrong_signature-422]
+CASO 042 | APROVADO | 0.025 s | src/app/tests/test_auth.py::test_jwt_invalido_nao_acessa_rota_protegida[refresh-422]
+CASO 043 | APROVADO | 0.024 s | src/app/tests/test_auth.py::test_callback_existente_rejeita_jti_na_blocklist_da_aplicacao
+CASO 044 | APROVADO | 0.025 s | src/app/tests/test_auth.py::test_logout_registra_jti_no_conjunto_da_rota
+CASO 045 | REPROVADO | 0.028 s | src/app/tests/test_auth.py::test_token_deve_ser_rejeitado_apos_logout
+  Diferença observada: assert 200 == 401
+CASO 046 | REPROVADO | 0.148 s | src/app/tests/test_auth.py::test_root_pode_cadastrar_outro_root_valido
+  Diferença observada: assert 500 == 201
+CASO 047 | APROVADO | 0.031 s | src/app/tests/test_auth.py::test_associacao_usuario_rfid_rejeita_conflitos[payload0-400]
+CASO 048 | APROVADO | 0.032 s | src/app/tests/test_auth.py::test_associacao_usuario_rfid_rejeita_conflitos[payload1-404]
+CASO 049 | APROVADO | 0.032 s | src/app/tests/test_auth.py::test_associacao_usuario_rfid_rejeita_conflitos[payload2-404]
+CASO 050 | APROVADO | 0.034 s | src/app/tests/test_auth.py::test_associacao_usuario_rfid_rejeita_conflitos[payload3-409]
+CASO 051 | APROVADO | 0.034 s | src/app/tests/test_auth.py::test_associacao_usuario_rfid_rejeita_conflitos[payload4-409]
+CASO 052 | APROVADO | 0.030 s | src/app/tests/test_auth.py::test_associacao_usuario_rfid_rejeita_conflitos[payload5-404]
+CASO 053 | APROVADO | 0.037 s | src/app/tests/test_auth.py::test_associacao_usuario_rfid_valida
+CASO 054 | APROVADO | 0.026 s | src/app/tests/test_auth.py::test_consulta_usuarios_root_nao_retorna_hashes
+CASO 055 | APROVADO | 0.027 s | src/app/tests/test_auth.py::test_busca_usuario_por_uid_preserva_rota_publica[c3d4e5f6-200]
+CASO 056 | APROVADO | 0.027 s | src/app/tests/test_auth.py::test_busca_usuario_por_uid_preserva_rota_publica[inexistente-404]
+CASO 057 | APROVADO | 0.035 s | src/app/tests/test_http.py::test_pagina_inicial_preserva_template_e_javascript
+CASO 058 | REPROVADO | 0.020 s | src/app/tests/test_http.py::test_erros_http_preservam_status_original[get-/rota-inexistente-404]
+  Diferença observada: assert 500 == 404
+CASO 059 | REPROVADO | 0.020 s | src/app/tests/test_http.py::test_erros_http_preservam_status_original[get-/login-405]
+  Diferença observada: assert 500 == 405
+CASO 060 | REPROVADO | 0.021 s | src/app/tests/test_http.py::test_erros_de_parse_json_preservam_status[json_malformado]
+  Diferença observada: assert 500 == 400
+CASO 061 | REPROVADO | 0.020 s | src/app/tests/test_http.py::test_erros_de_parse_json_preservam_status[content_type_incorreto]
+  Diferença observada: assert 500 == 415
+CASO 062 | APROVADO | 0.021 s | src/app/tests/test_http.py::test_excecao_inesperada_retorna_resposta_generica
+CASO 063 | APROVADO | 0.135 s | src/app/tests/test_http.py::test_falha_de_banco_no_cadastro_retorna_500
+CASO 064 | APROVADO | 0.021 s | src/app/tests/test_http.py::test_logger_original_preserva_mensagem_e_arquivos_temporarios
+CASO 065 | APROVADO | 0.017 s | src/app/tests/test_http.py::test_bootstrap_esta_isolado_em_memoria
+CASO 066 | APROVADO | 0.019 s | src/app/tests/test_http.py::test_bloqueios_impedem_acesso_externo[sqlite]
+CASO 067 | APROVADO | 0.017 s | src/app/tests/test_http.py::test_bloqueios_impedem_acesso_externo[sqlite_uri]
+CASO 068 | APROVADO | 0.017 s | src/app/tests/test_http.py::test_bloqueios_impedem_acesso_externo[socket]
+CASO 069 | APROVADO | 0.017 s | src/app/tests/test_http.py::test_bloqueios_impedem_acesso_externo[dns]
+CASO 070 | APROVADO | 0.017 s | src/app/tests/test_http.py::test_bloqueios_impedem_acesso_externo[upload]
+CASO 071 | APROVADO | 0.059 s | src/app/tests/test_inventory.py::test_cadastro_objeto_e_imagem_no_diretorio_temporario
+CASO 072 | APROVADO | 0.045 s | src/app/tests/test_inventory.py::test_cadastro_objeto_rejeita_campos_obrigatorios_ausentes[nome]
+CASO 073 | APROVADO | 0.041 s | src/app/tests/test_inventory.py::test_cadastro_objeto_rejeita_campos_obrigatorios_ausentes[descricao]
+CASO 074 | APROVADO | 0.041 s | src/app/tests/test_inventory.py::test_cadastro_objeto_rejeita_campos_obrigatorios_ausentes[local]
+CASO 075 | APROVADO | 0.041 s | src/app/tests/test_inventory.py::test_cadastro_objeto_rejeita_campos_obrigatorios_ausentes[uid_recebido]
+CASO 076 | APROVADO | 0.031 s | src/app/tests/test_inventory.py::test_cadastro_objeto_rejeita_campos_obrigatorios_ausentes[imagem]
+CASO 077 | APROVADO | 0.042 s | src/app/tests/test_inventory.py::test_cadastro_objeto_rejeita_referencias_inexistentes[changes0]
+CASO 078 | APROVADO | 0.042 s | src/app/tests/test_inventory.py::test_cadastro_objeto_rejeita_referencias_inexistentes[changes1]
+CASO 079 | APROVADO | 0.044 s | src/app/tests/test_inventory.py::test_nome_do_upload_e_sanitizado
+CASO 080 | APROVADO | 0.030 s | src/app/tests/test_inventory.py::test_recadastro_objeto_rejeita_entradas_e_conflitos[payload0-400]
+CASO 081 | APROVADO | 0.032 s | src/app/tests/test_inventory.py::test_recadastro_objeto_rejeita_entradas_e_conflitos[payload1-404]
+CASO 082 | APROVADO | 0.031 s | src/app/tests/test_inventory.py::test_recadastro_objeto_rejeita_entradas_e_conflitos[payload2-404]
+CASO 083 | APROVADO | 0.032 s | src/app/tests/test_inventory.py::test_recadastro_objeto_rejeita_entradas_e_conflitos[payload3-400]
+CASO 084 | APROVADO | 0.037 s | src/app/tests/test_inventory.py::test_recadastro_objeto_atualiza_uid
+CASO 085 | APROVADO | 0.030 s | src/app/tests/test_inventory.py::test_exclusao_objeto[payload0-400-1]
+CASO 086 | APROVADO | 0.031 s | src/app/tests/test_inventory.py::test_exclusao_objeto[payload1-404-1]
+CASO 087 | APROVADO | 0.033 s | src/app/tests/test_inventory.py::test_exclusao_objeto[payload2-200-0]
+CASO 088 | APROVADO | 0.030 s | src/app/tests/test_inventory.py::test_inventario_disponivel_aos_perfis_existentes[root]
+CASO 089 | APROVADO | 0.030 s | src/app/tests/test_inventory.py::test_inventario_disponivel_aos_perfis_existentes[user]
+CASO 090 | APROVADO | 0.018 s | src/app/tests/test_inventory.py::test_inventario_exige_jwt
+CASO 091 | APROVADO | 0.033 s | src/app/tests/test_inventory.py::test_consultas_publicas_preservam_historico[/buscar_objeto_id/1-200-buscar_objeto_id-sucesso]
+CASO 092 | APROVADO | 0.028 s | src/app/tests/test_inventory.py::test_consultas_publicas_preservam_historico[/buscar_objeto_id/999-404-buscar_objeto_id-falha]
+CASO 093 | APROVADO | 0.030 s | src/app/tests/test_inventory.py::test_consultas_publicas_preservam_historico[/buscar_objeto_uid/a1b2c3d4-200-buscar_objeto_uid-sucesso]
+CASO 094 | APROVADO | 0.028 s | src/app/tests/test_inventory.py::test_consultas_publicas_preservam_historico[/buscar_objeto_uid/inexistente-404-buscar_objeto_uid-falha]
+CASO 095 | APROVADO | 0.033 s | src/app/tests/test_inventory.py::test_busca_objeto_por_nome[Notebook-200]
+CASO 096 | APROVADO | 0.027 s | src/app/tests/test_inventory.py::test_busca_objeto_por_nome[book-200]
+CASO 097 | APROVADO | 0.027 s | src/app/tests/test_inventory.py::test_busca_objeto_por_nome[INEXISTENTE-404]
+CASO 098 | APROVADO | 0.042 s | src/app/tests/test_inventory.py::test_cadastro_e_edicao_de_local
+CASO 099 | APROVADO | 0.030 s | src/app/tests/test_inventory.py::test_locais_rejeitam_corpo_vazio_ou_id_inexistente[post-/cadastrar_local-payload0-400]
+CASO 100 | APROVADO | 0.030 s | src/app/tests/test_inventory.py::test_locais_rejeitam_corpo_vazio_ou_id_inexistente[put-/editar_local-payload1-400]
+CASO 101 | APROVADO | 0.031 s | src/app/tests/test_inventory.py::test_locais_rejeitam_corpo_vazio_ou_id_inexistente[put-/editar_local-payload2-404]
+CASO 102 | REPROVADO | 0.026 s | src/app/tests/test_inventory.py::test_local_incompleto_deve_ser_rejeitado_com_400[endereco]
+  Diferença observada: assert 200 == 400
+CASO 103 | REPROVADO | 0.027 s | src/app/tests/test_inventory.py::test_local_incompleto_deve_ser_rejeitado_com_400[descricao]
+  Diferença observada: assert 500 == 400
+CASO 104 | REPROVADO | 0.027 s | src/app/tests/test_inventory.py::test_local_incompleto_deve_ser_rejeitado_com_400[responsavel]
+  Diferença observada: assert 500 == 400
+CASO 105 | APROVADO | 0.026 s | src/app/tests/test_inventory.py::test_listagem_publica_de_locais
+CASO 106 | APROVADO | 0.029 s | src/app/tests/test_inventory.py::test_cadastro_esp32_preserva_mac_e_local_sem_token
+CASO 107 | APROVADO | 0.022 s | src/app/tests/test_inventory.py::test_cadastro_esp32_rejeita_campos_ausentes[payload0]
+CASO 108 | APROVADO | 0.020 s | src/app/tests/test_inventory.py::test_cadastro_esp32_rejeita_campos_ausentes[payload1]
+CASO 109 | APROVADO | 0.020 s | src/app/tests/test_inventory.py::test_cadastro_esp32_rejeita_campos_ausentes[payload2]
+CASO 110 | APROVADO | 0.029 s | src/app/tests/test_inventory.py::test_esp32_duplicado_nao_persiste_novamente
+CASO 111 | APROVADO | 0.035 s | src/app/tests/test_inventory.py::test_leitura_http_autorizada_apenas_por_mac_cadastrado[d4e5f6a7-livre]
+CASO 112 | APROVADO | 0.030 s | src/app/tests/test_inventory.py::test_leitura_http_autorizada_apenas_por_mac_cadastrado[a1b2c3d4-objeto]
+CASO 113 | APROVADO | 0.031 s | src/app/tests/test_inventory.py::test_leitura_http_autorizada_apenas_por_mac_cadastrado[c3d4e5f6-usuario]
+CASO 114 | APROVADO | 0.029 s | src/app/tests/test_inventory.py::test_mac_nao_cadastrado_nao_autoriza_leitura[AA:BB:CC:DD:EE:99]
+CASO 115 | APROVADO | 0.028 s | src/app/tests/test_inventory.py::test_mac_nao_cadastrado_nao_autoriza_leitura[]
+CASO 116 | APROVADO | 0.028 s | src/app/tests/test_inventory.py::test_mac_nao_cadastrado_nao_autoriza_leitura[None]
+CASO 117 | APROVADO | 0.034 s | src/app/tests/test_inventory.py::test_leitura_idempotente_nao_duplica_tag
+CASO 118 | APROVADO | 0.032 s | src/app/tests/test_inventory.py::test_evento_socketio_real_em_processo_apos_leitura
+CASO 119 | APROVADO | 0.018 s | src/app/tests/test_inventory.py::test_rfid_corpo_vazio_retorna_400
+CASO 120 | APROVADO | 0.030 s | src/app/tests/test_inventory.py::test_listagem_rfid_publica_preserva_campos
+CASO 121 | APROVADO | 0.026 s | src/app/tests/test_inventory.py::test_consulta_rfid_por_uid[a1b2c3d4-200]
+CASO 122 | APROVADO | 0.026 s | src/app/tests/test_inventory.py::test_consulta_rfid_por_uid[inexistente-400]
+CASO 123 | APROVADO | 0.031 s | src/app/tests/test_inventory.py::test_exclusao_de_tag_livre_e_bloqueio_de_objeto[payload0-400-3]
+CASO 124 | APROVADO | 0.032 s | src/app/tests/test_inventory.py::test_exclusao_de_tag_livre_e_bloqueio_de_objeto[payload1-404-3]
+CASO 125 | APROVADO | 0.032 s | src/app/tests/test_inventory.py::test_exclusao_de_tag_livre_e_bloqueio_de_objeto[payload2-400-3]
+CASO 126 | APROVADO | 0.033 s | src/app/tests/test_inventory.py::test_exclusao_de_tag_livre_e_bloqueio_de_objeto[payload3-200-2]
+CASO 127 | APROVADO | 0.033 s | src/app/tests/test_inventory.py::test_falha_de_commit_nao_persiste_operacao[post-/cadastrar_local-payload0]
+CASO 128 | APROVADO | 0.034 s | src/app/tests/test_inventory.py::test_falha_de_commit_nao_persiste_operacao[put-/editar_local-payload1]
+CASO 129 | APROVADO | 0.031 s | src/app/tests/test_inventory.py::test_falha_de_commit_nao_persiste_operacao[post-/cadastrar_esp32-payload2]
+CASO 130 | APROVADO | 0.036 s | src/app/tests/test_inventory.py::test_falha_de_commit_nao_persiste_operacao[post-/atribuir_rfid_usuario-payload3]
+CASO 131 | APROVADO | 0.035 s | src/app/tests/test_inventory.py::test_falha_de_commit_nao_persiste_operacao[put-/recadastrar_objeto-payload4]
+CASO 132 | APROVADO | 0.035 s | src/app/tests/test_inventory.py::test_falha_de_commit_nao_persiste_operacao[delete-/excluir_objeto-payload5]
+CASO 133 | APROVADO | 0.034 s | src/app/tests/test_inventory.py::test_falha_de_commit_nao_persiste_operacao[delete-/excluir_rfid-payload6]
+CASO 134 | APROVADO | 0.057 s | src/app/tests/test_models.py::test_restricoes_declaradas_no_schema[email_unico]
+CASO 135 | APROVADO | 0.055 s | src/app/tests/test_models.py::test_restricoes_declaradas_no_schema[email_obrigatorio]
+CASO 136 | APROVADO | 0.056 s | src/app/tests/test_models.py::test_restricoes_declaradas_no_schema[senha_obrigatoria]
+CASO 137 | APROVADO | 0.053 s | src/app/tests/test_models.py::test_restricoes_declaradas_no_schema[credencial_unica]
+CASO 138 | APROVADO | 0.054 s | src/app/tests/test_models.py::test_restricoes_declaradas_no_schema[credencial_fk]
+CASO 139 | APROVADO | 0.053 s | src/app/tests/test_models.py::test_restricoes_declaradas_no_schema[uid_unica]
+CASO 140 | APROVADO | 0.058 s | src/app/tests/test_models.py::test_restricoes_declaradas_no_schema[data_obrigatoria]
+CASO 141 | APROVADO | 0.055 s | src/app/tests/test_models.py::test_restricoes_declaradas_no_schema[objeto_tag_unica]
+CASO 142 | APROVADO | 0.059 s | src/app/tests/test_models.py::test_restricoes_declaradas_no_schema[objeto_tag_fk]
+CASO 143 | APROVADO | 0.054 s | src/app/tests/test_models.py::test_restricoes_declaradas_no_schema[objeto_local_fk]
+CASO 144 | APROVADO | 0.053 s | src/app/tests/test_models.py::test_restricoes_declaradas_no_schema[mac_unico]
+CASO 145 | APROVADO | 0.053 s | src/app/tests/test_models.py::test_restricoes_declaradas_no_schema[dispositivo_local_fk]
+CASO 146 | APROVADO | 0.055 s | src/app/tests/test_models.py::test_restricoes_declaradas_no_schema[root_usuario_fk]
+CASO 147 | APROVADO | 0.053 s | src/app/tests/test_models.py::test_restricoes_declaradas_no_schema[root_senha_obrigatoria]
+CASO 148 | APROVADO | 0.054 s | src/app/tests/test_models.py::test_restricoes_declaradas_no_schema[acesso_tag_fk]
+CASO 149 | APROVADO | 0.055 s | src/app/tests/test_models.py::test_restricoes_declaradas_no_schema[acesso_local_fk]
+CASO 150 | APROVADO | 0.055 s | src/app/tests/test_models.py::test_restricoes_declaradas_no_schema[historico_objeto_fk]
+CASO 151 | APROVADO | 0.056 s | src/app/tests/test_models.py::test_restricoes_declaradas_no_schema[historico_usuario_fk]
+CASO 152 | APROVADO | 0.056 s | src/app/tests/test_models.py::test_referencias_opcionais_de_historico_aceitam_null
+CASO 153 | APROVADO | 0.026 s | src/app/tests/test_models.py::test_hierarquia_user_root_e_relacionamento_local
+CASO 154 | APROVADO | 0.017 s | src/app/tests/test_models.py::test_schema_original_com_apenas_as_tabelas_de_visitante_aprovadas
+CASO 155 | APROVADO | 0.055 s | src/app/tests/test_models.py::test_verificacao_fk_dos_modelos_nao_reconfigura_engine_da_api
+CASO 156 | APROVADO | 0.085 s | src/app/tests/test_models.py::test_restricoes_das_tres_tabelas_de_visitante[visitante_sem_user]
+CASO 157 | APROVADO | 0.062 s | src/app/tests/test_models.py::test_restricoes_das_tres_tabelas_de_visitante[inicio_nulo]
+CASO 158 | APROVADO | 0.058 s | src/app/tests/test_models.py::test_restricoes_das_tres_tabelas_de_visitante[periodo_invertido]
+CASO 159 | APROVADO | 0.058 s | src/app/tests/test_models.py::test_restricoes_das_tres_tabelas_de_visitante[periodo_igual]
+CASO 160 | APROVADO | 0.062 s | src/app/tests/test_models.py::test_restricoes_das_tres_tabelas_de_visitante[local_inexistente]
+CASO 161 | APROVADO | 0.061 s | src/app/tests/test_models.py::test_restricoes_das_tres_tabelas_de_visitante[user_nao_visitante]
+CASO 162 | APROVADO | 0.058 s | src/app/tests/test_models.py::test_restricoes_das_tres_tabelas_de_visitante[local_duplicado]
+CASO 163 | APROVADO | 0.059 s | src/app/tests/test_models.py::test_restricoes_das_tres_tabelas_de_visitante[registro_inexistente]
+CASO 164 | APROVADO | 0.058 s | src/app/tests/test_models.py::test_restricoes_das_tres_tabelas_de_visitante[historico_user_nao_visitante]
+CASO 165 | APROVADO | 0.061 s | src/app/tests/test_models.py::test_restricoes_das_tres_tabelas_de_visitante[registro_duplicado]
+CASO 166 | APROVADO | 0.024 s | src/app/tests/test_mqtt.py::test_configuracao_original_de_broker_topicos_e_rota
+CASO 167 | APROVADO | 0.018 s | src/app/tests/test_mqtt.py::test_conexao_assina_topico_original
+CASO 168 | APROVADO | 0.019 s | src/app/tests/test_mqtt.py::test_mensagem_encaminha_json_original_sem_token_ou_cabecalho_novo[200-200]
+CASO 169 | APROVADO | 0.019 s | src/app/tests/test_mqtt.py::test_mensagem_encaminha_json_original_sem_token_ou_cabecalho_novo[201-200]
+CASO 170 | APROVADO | 0.019 s | src/app/tests/test_mqtt.py::test_mensagem_encaminha_json_original_sem_token_ou_cabecalho_novo[400-401]
+CASO 171 | APROVADO | 0.019 s | src/app/tests/test_mqtt.py::test_mensagem_encaminha_json_original_sem_token_ou_cabecalho_novo[401-401]
+CASO 172 | APROVADO | 0.019 s | src/app/tests/test_mqtt.py::test_mensagem_encaminha_json_original_sem_token_ou_cabecalho_novo[403-401]
+CASO 173 | APROVADO | 0.019 s | src/app/tests/test_mqtt.py::test_mensagem_encaminha_json_original_sem_token_ou_cabecalho_novo[404-401]
+CASO 174 | APROVADO | 0.019 s | src/app/tests/test_mqtt.py::test_mensagem_encaminha_json_original_sem_token_ou_cabecalho_novo[500-401]
+CASO 175 | APROVADO | 0.018 s | src/app/tests/test_mqtt.py::test_topico_alheio_nao_encaminha_mensagem
+CASO 176 | APROVADO | 0.018 s | src/app/tests/test_mqtt.py::test_json_malformado_publica_erro_original[{]
+CASO 177 | APROVADO | 0.018 s | src/app/tests/test_mqtt.py::test_json_malformado_publica_erro_original[nao-e-json]
+CASO 178 | APROVADO | 0.018 s | src/app/tests/test_mqtt.py::test_json_malformado_publica_erro_original[]
+CASO 179 | APROVADO | 0.018 s | src/app/tests/test_mqtt.py::test_falhas_de_rede_publicam_500_com_mocks[ConnectionError]
+CASO 180 | APROVADO | 0.018 s | src/app/tests/test_mqtt.py::test_falhas_de_rede_publicam_500_com_mocks[Timeout]
+CASO 181 | APROVADO | 0.019 s | src/app/tests/test_mqtt.py::test_falhas_de_rede_publicam_500_com_mocks[RequestException]
+CASO 182 | APROVADO | 0.018 s | src/app/tests/test_mqtt.py::test_campos_ausentes_continuam_encaminhados_sem_traducao_automatica
+CASO 183 | APROVADO | 0.017 s | src/app/tests/test_mqtt.py::test_limite_atual_utf8_invalido_nao_tem_tratamento
+CASO 184 | APROVADO | 0.017 s | src/app/tests/test_mqtt.py::test_limite_atual_json_lista_nao_tem_tratamento
+CASO 185 | APROVADO | 0.018 s | src/app/tests/test_mqtt.py::test_resposta_mqtt_preserva_topico_e_codigo_textual[200]
+CASO 186 | APROVADO | 0.018 s | src/app/tests/test_mqtt.py::test_resposta_mqtt_preserva_topico_e_codigo_textual[401]
+CASO 187 | APROVADO | 0.018 s | src/app/tests/test_mqtt.py::test_resposta_mqtt_preserva_topico_e_codigo_textual[500]
+CASO 188 | APROVADO | 0.018 s | src/app/tests/test_mqtt.py::test_erro_na_publicacao_e_registrado_sem_escapar
+CASO 189 | APROVADO | 0.018 s | src/app/tests/test_mqtt.py::test_cliente_inicia_callbacks_e_loop_originais
+CASO 190 | APROVADO | 0.019 s | src/app/tests/test_mqtt.py::test_cliente_trata_falha_de_conexao
+CASO 191 | APROVADO | 0.018 s | src/app/tests/test_mqtt.py::test_interrupcao_desconecta_cliente
+CASO 192 | APROVADO | 0.041 s | src/app/tests/test_visitors.py::test_administracao_de_visitantes_exige_root[None-401-post-/visitantes]
+CASO 193 | APROVADO | 0.034 s | src/app/tests/test_visitors.py::test_administracao_de_visitantes_exige_root[None-401-get-/visitantes]
+CASO 194 | APROVADO | 0.034 s | src/app/tests/test_visitors.py::test_administracao_de_visitantes_exige_root[None-401-get-/visitantes/999]
+CASO 195 | APROVADO | 0.034 s | src/app/tests/test_visitors.py::test_administracao_de_visitantes_exige_root[None-401-put-/visitantes/999]
+CASO 196 | APROVADO | 0.034 s | src/app/tests/test_visitors.py::test_administracao_de_visitantes_exige_root[None-401-post-/visitantes/999/revogar]
+CASO 197 | APROVADO | 0.034 s | src/app/tests/test_visitors.py::test_administracao_de_visitantes_exige_root[None-401-get-/visitantes/999/acessos]
+CASO 198 | APROVADO | 0.035 s | src/app/tests/test_visitors.py::test_administracao_de_visitantes_exige_root[user-403-post-/visitantes]
+CASO 199 | APROVADO | 0.035 s | src/app/tests/test_visitors.py::test_administracao_de_visitantes_exige_root[user-403-get-/visitantes]
+CASO 200 | APROVADO | 0.037 s | src/app/tests/test_visitors.py::test_administracao_de_visitantes_exige_root[user-403-get-/visitantes/999]
+CASO 201 | APROVADO | 0.036 s | src/app/tests/test_visitors.py::test_administracao_de_visitantes_exige_root[user-403-put-/visitantes/999]
+CASO 202 | APROVADO | 0.035 s | src/app/tests/test_visitors.py::test_administracao_de_visitantes_exige_root[user-403-post-/visitantes/999/revogar]
+CASO 203 | APROVADO | 0.035 s | src/app/tests/test_visitors.py::test_administracao_de_visitantes_exige_root[user-403-get-/visitantes/999/acessos]
+CASO 204 | APROVADO | 0.036 s | src/app/tests/test_visitors.py::test_administracao_de_visitantes_exige_root[visitante-403-post-/visitantes]
+CASO 205 | APROVADO | 0.036 s | src/app/tests/test_visitors.py::test_administracao_de_visitantes_exige_root[visitante-403-get-/visitantes]
+CASO 206 | APROVADO | 0.036 s | src/app/tests/test_visitors.py::test_administracao_de_visitantes_exige_root[visitante-403-get-/visitantes/999]
+CASO 207 | APROVADO | 0.036 s | src/app/tests/test_visitors.py::test_administracao_de_visitantes_exige_root[visitante-403-put-/visitantes/999]
+CASO 208 | APROVADO | 0.036 s | src/app/tests/test_visitors.py::test_administracao_de_visitantes_exige_root[visitante-403-post-/visitantes/999/revogar]
+CASO 209 | APROVADO | 0.035 s | src/app/tests/test_visitors.py::test_administracao_de_visitantes_exige_root[visitante-403-get-/visitantes/999/acessos]
+CASO 210 | APROVADO | 0.033 s | src/app/tests/test_visitors.py::test_visitante_nao_recebe_permissoes_root_existentes[post-/registrar_root]
+CASO 211 | APROVADO | 0.033 s | src/app/tests/test_visitors.py::test_visitante_nao_recebe_permissoes_root_existentes[post-/atribuir_rfid_usuario]
+CASO 212 | APROVADO | 0.033 s | src/app/tests/test_visitors.py::test_visitante_nao_recebe_permissoes_root_existentes[get-/visualizar_todos_usuarios]
+CASO 213 | APROVADO | 0.034 s | src/app/tests/test_visitors.py::test_visitante_nao_recebe_permissoes_root_existentes[post-/cadastrar_objeto]
+CASO 214 | APROVADO | 0.033 s | src/app/tests/test_visitors.py::test_visitante_nao_recebe_permissoes_root_existentes[put-/recadastrar_objeto]
+CASO 215 | APROVADO | 0.033 s | src/app/tests/test_visitors.py::test_visitante_nao_recebe_permissoes_root_existentes[delete-/excluir_objeto]
+CASO 216 | APROVADO | 0.033 s | src/app/tests/test_visitors.py::test_visitante_nao_recebe_permissoes_root_existentes[post-/cadastrar_local]
+CASO 217 | APROVADO | 0.033 s | src/app/tests/test_visitors.py::test_visitante_nao_recebe_permissoes_root_existentes[put-/editar_local]
+CASO 218 | APROVADO | 0.033 s | src/app/tests/test_visitors.py::test_visitante_nao_recebe_permissoes_root_existentes[delete-/excluir_rfid]
+CASO 219 | APROVADO | 0.271 s | src/app/tests/test_visitors.py::test_cadastro_visitante_reutiliza_user_sem_expor_senha
+CASO 220 | APROVADO | 0.039 s | src/app/tests/test_visitors.py::test_cadastro_visitante_rejeita_campos_ausentes[nome]
+CASO 221 | APROVADO | 0.033 s | src/app/tests/test_visitors.py::test_cadastro_visitante_rejeita_campos_ausentes[email]
+CASO 222 | APROVADO | 0.033 s | src/app/tests/test_visitors.py::test_cadastro_visitante_rejeita_campos_ausentes[senha]
+CASO 223 | APROVADO | 0.034 s | src/app/tests/test_visitors.py::test_cadastro_visitante_rejeita_campos_ausentes[credencial_rfid]
+CASO 224 | APROVADO | 0.035 s | src/app/tests/test_visitors.py::test_cadastro_visitante_rejeita_campos_ausentes[inicio]
+CASO 225 | APROVADO | 0.035 s | src/app/tests/test_visitors.py::test_cadastro_visitante_rejeita_campos_ausentes[expiracao]
+CASO 226 | APROVADO | 0.035 s | src/app/tests/test_visitors.py::test_cadastro_visitante_rejeita_campos_ausentes[locais]
+CASO 227 | APROVADO | 0.033 s | src/app/tests/test_visitors.py::test_cadastro_visitante_valida_novos_campos_sem_persistencia_parcial[changes0-400]
+CASO 228 | APROVADO | 0.032 s | src/app/tests/test_visitors.py::test_cadastro_visitante_valida_novos_campos_sem_persistencia_parcial[changes1-400]
+CASO 229 | APROVADO | 0.032 s | src/app/tests/test_visitors.py::test_cadastro_visitante_valida_novos_campos_sem_persistencia_parcial[changes2-400]
+CASO 230 | APROVADO | 0.032 s | src/app/tests/test_visitors.py::test_cadastro_visitante_valida_novos_campos_sem_persistencia_parcial[changes3-400]
+CASO 231 | APROVADO | 0.032 s | src/app/tests/test_visitors.py::test_cadastro_visitante_valida_novos_campos_sem_persistencia_parcial[changes4-400]
+CASO 232 | APROVADO | 0.033 s | src/app/tests/test_visitors.py::test_cadastro_visitante_valida_novos_campos_sem_persistencia_parcial[changes5-400]
+CASO 233 | APROVADO | 0.032 s | src/app/tests/test_visitors.py::test_cadastro_visitante_valida_novos_campos_sem_persistencia_parcial[changes6-400]
+CASO 234 | APROVADO | 0.032 s | src/app/tests/test_visitors.py::test_cadastro_visitante_valida_novos_campos_sem_persistencia_parcial[changes7-400]
+CASO 235 | APROVADO | 0.033 s | src/app/tests/test_visitors.py::test_cadastro_visitante_valida_novos_campos_sem_persistencia_parcial[changes8-400]
+CASO 236 | APROVADO | 0.033 s | src/app/tests/test_visitors.py::test_cadastro_visitante_valida_novos_campos_sem_persistencia_parcial[changes9-400]
+CASO 237 | APROVADO | 0.034 s | src/app/tests/test_visitors.py::test_cadastro_visitante_valida_novos_campos_sem_persistencia_parcial[changes10-404]
+CASO 238 | APROVADO | 0.035 s | src/app/tests/test_visitors.py::test_cadastro_visitante_valida_novos_campos_sem_persistencia_parcial[changes11-409]
+CASO 239 | APROVADO | 0.035 s | src/app/tests/test_visitors.py::test_cadastro_visitante_valida_novos_campos_sem_persistencia_parcial[changes12-409]
+CASO 240 | APROVADO | 0.075 s | src/app/tests/test_visitors.py::test_cadastro_visitante_valida_novos_campos_sem_persistencia_parcial[changes13-409]
+CASO 241 | APROVADO | 0.035 s | src/app/tests/test_visitors.py::test_cadastro_visitante_valida_novos_campos_sem_persistencia_parcial[changes14-400]
+CASO 242 | APROVADO | 0.035 s | src/app/tests/test_visitors.py::test_cadastro_visitante_valida_novos_campos_sem_persistencia_parcial[changes15-400]
+CASO 243 | APROVADO | 0.035 s | src/app/tests/test_visitors.py::test_cadastro_visitante_valida_novos_campos_sem_persistencia_parcial[changes16-400]
+CASO 244 | APROVADO | 0.035 s | src/app/tests/test_visitors.py::test_cadastro_visitante_valida_novos_campos_sem_persistencia_parcial[changes17-400]
+CASO 245 | APROVADO | 0.035 s | src/app/tests/test_visitors.py::test_cadastro_visitante_valida_novos_campos_sem_persistencia_parcial[changes18-400]
+CASO 246 | APROVADO | 0.035 s | src/app/tests/test_visitors.py::test_cadastro_visitante_valida_novos_campos_sem_persistencia_parcial[changes19-400]
+CASO 247 | APROVADO | 0.035 s | src/app/tests/test_visitors.py::test_cadastro_visitante_valida_novos_campos_sem_persistencia_parcial[changes20-400]
+CASO 248 | APROVADO | 0.035 s | src/app/tests/test_visitors.py::test_cadastro_visitante_valida_novos_campos_sem_persistencia_parcial[changes21-400]
+CASO 249 | APROVADO | 0.035 s | src/app/tests/test_visitors.py::test_cadastro_visitante_valida_novos_campos_sem_persistencia_parcial[changes22-400]
+CASO 250 | APROVADO | 0.035 s | src/app/tests/test_visitors.py::test_cadastro_visitante_valida_novos_campos_sem_persistencia_parcial[changes23-400]
+CASO 251 | APROVADO | 0.035 s | src/app/tests/test_visitors.py::test_cadastro_visitante_valida_novos_campos_sem_persistencia_parcial[changes24-400]
+CASO 252 | APROVADO | 0.036 s | src/app/tests/test_visitors.py::test_cadastro_visitante_valida_novos_campos_sem_persistencia_parcial[changes25-404]
+CASO 253 | APROVADO | 0.035 s | src/app/tests/test_visitors.py::test_cadastro_visitante_valida_novos_campos_sem_persistencia_parcial[changes26-400]
+CASO 254 | APROVADO | 0.033 s | src/app/tests/test_visitors.py::test_cadastro_visitante_valida_novos_campos_sem_persistencia_parcial[changes27-400]
+CASO 255 | APROVADO | 0.033 s | src/app/tests/test_visitors.py::test_cadastro_visitante_valida_novos_campos_sem_persistencia_parcial[changes28-400]
+CASO 256 | APROVADO | 0.033 s | src/app/tests/test_visitors.py::test_periodo_visitante_exige_inicio_anterior_a_expiracao[igual]
+CASO 257 | APROVADO | 0.033 s | src/app/tests/test_visitors.py::test_periodo_visitante_exige_inicio_anterior_a_expiracao[invertido]
+CASO 258 | APROVADO | 0.152 s | src/app/tests/test_visitors.py::test_datas_visitante_com_offset_sao_armazenadas_em_utc
+CASO 259 | APROVADO | 0.055 s | src/app/tests/test_visitors.py::test_filtro_administrativo_por_situacao[ativo]
+CASO 260 | APROVADO | 0.054 s | src/app/tests/test_visitors.py::test_filtro_administrativo_por_situacao[agendado]
+CASO 261 | APROVADO | 0.054 s | src/app/tests/test_visitors.py::test_filtro_administrativo_por_situacao[expirado]
+CASO 262 | APROVADO | 0.054 s | src/app/tests/test_visitors.py::test_filtro_administrativo_por_situacao[revogado]
+CASO 263 | APROVADO | 0.045 s | src/app/tests/test_visitors.py::test_paginacao_visitantes_nao_expoe_hashes
+CASO 264 | APROVADO | 0.026 s | src/app/tests/test_visitors.py::test_listagem_visitantes_rejeita_filtros_invalidos[pagina=0]
+CASO 265 | APROVADO | 0.026 s | src/app/tests/test_visitors.py::test_listagem_visitantes_rejeita_filtros_invalidos[pagina=abc]
+CASO 266 | APROVADO | 0.026 s | src/app/tests/test_visitors.py::test_listagem_visitantes_rejeita_filtros_invalidos[limite=0]
+CASO 267 | APROVADO | 0.027 s | src/app/tests/test_visitors.py::test_listagem_visitantes_rejeita_filtros_invalidos[limite=101]
+CASO 268 | APROVADO | 0.026 s | src/app/tests/test_visitors.py::test_listagem_visitantes_rejeita_filtros_invalidos[limite=1.5]
+CASO 269 | APROVADO | 0.026 s | src/app/tests/test_visitors.py::test_listagem_visitantes_rejeita_filtros_invalidos[status=invalido]
+CASO 270 | APROVADO | 0.051 s | src/app/tests/test_visitors.py::test_consulta_individual_nao_confunde_user_ou_root_com_visitante
+CASO 271 | APROVADO | 0.027 s | src/app/tests/test_visitors.py::test_visitante_inexistente_retorna_404[get-]
+CASO 272 | APROVADO | 0.027 s | src/app/tests/test_visitors.py::test_visitante_inexistente_retorna_404[put-]
+CASO 273 | APROVADO | 0.027 s | src/app/tests/test_visitors.py::test_visitante_inexistente_retorna_404[post-/revogar]
+CASO 274 | APROVADO | 0.027 s | src/app/tests/test_visitors.py::test_visitante_inexistente_retorna_404[get-/acessos]
+CASO 275 | APROVADO | 0.046 s | src/app/tests/test_visitors.py::test_edicao_periodo_local_e_uid_preserva_perfil
+CASO 276 | APROVADO | 0.038 s | src/app/tests/test_visitors.py::test_edicao_invalida_nao_altera_visitante[changes0-400]
+CASO 277 | APROVADO | 0.038 s | src/app/tests/test_visitors.py::test_edicao_invalida_nao_altera_visitante[changes1-400]
+CASO 278 | APROVADO | 0.038 s | src/app/tests/test_visitors.py::test_edicao_invalida_nao_altera_visitante[changes2-400]
+CASO 279 | APROVADO | 0.041 s | src/app/tests/test_visitors.py::test_edicao_invalida_nao_altera_visitante[changes3-404]
+CASO 280 | APROVADO | 0.040 s | src/app/tests/test_visitors.py::test_edicao_invalida_nao_altera_visitante[changes4-409]
+CASO 281 | APROVADO | 0.038 s | src/app/tests/test_visitors.py::test_edicao_invalida_nao_altera_visitante[changes5-400]
+CASO 282 | APROVADO | 0.056 s | src/app/tests/test_visitors.py::test_revogacao_idempotente_nao_exclui_cadastro_ou_historico
+CASO 283 | APROVADO | 0.038 s | src/app/tests/test_visitors.py::test_acesso_visitante_preserva_payload_respostas_e_registro[ativo-False-200]
+CASO 284 | APROVADO | 0.037 s | src/app/tests/test_visitors.py::test_acesso_visitante_preserva_payload_respostas_e_registro[agendado-False-403]
+CASO 285 | APROVADO | 0.037 s | src/app/tests/test_visitors.py::test_acesso_visitante_preserva_payload_respostas_e_registro[expirado-False-403]
+CASO 286 | APROVADO | 0.040 s | src/app/tests/test_visitors.py::test_acesso_visitante_preserva_payload_respostas_e_registro[revogado-False-403]
+CASO 287 | APROVADO | 0.038 s | src/app/tests/test_visitors.py::test_acesso_visitante_preserva_payload_respostas_e_registro[ativo-True-403]
+CASO 288 | APROVADO | 0.030 s | src/app/tests/test_visitors.py::test_limites_temporais_inicio_inclusivo_expiracao_exclusiva[-1-False]
+CASO 289 | APROVADO | 0.030 s | src/app/tests/test_visitors.py::test_limites_temporais_inicio_inclusivo_expiracao_exclusiva[0-True]
+CASO 290 | APROVADO | 0.030 s | src/app/tests/test_visitors.py::test_limites_temporais_inicio_inclusivo_expiracao_exclusiva[3599-True]
+CASO 291 | APROVADO | 0.030 s | src/app/tests/test_visitors.py::test_limites_temporais_inicio_inclusivo_expiracao_exclusiva[3600-False]
+CASO 292 | APROVADO | 0.042 s | src/app/tests/test_visitors.py::test_expiracao_e_reavaliada_sem_alterar_banco_ou_scheduler
+CASO 293 | APROVADO | 0.079 s | src/app/tests/test_visitors.py::test_historico_permanece_com_visitante_apos_reassociacao_pela_rota_original
+CASO 294 | APROVADO | 0.062 s | src/app/tests/test_visitors.py::test_historico_administrativo_filtra_sem_inferir_eventos_antigos
+CASO 295 | APROVADO | 0.037 s | src/app/tests/test_visitors.py::test_filtros_invalidos_do_historico[resultado=invalido]
+CASO 296 | APROVADO | 0.037 s | src/app/tests/test_visitors.py::test_filtros_invalidos_do_historico[local=0]
+CASO 297 | APROVADO | 0.037 s | src/app/tests/test_visitors.py::test_filtros_invalidos_do_historico[local=abc]
+CASO 298 | APROVADO | 0.037 s | src/app/tests/test_visitors.py::test_filtros_invalidos_do_historico[inicio=sem-fuso]
+CASO 299 | APROVADO | 0.037 s | src/app/tests/test_visitors.py::test_filtros_invalidos_do_historico[inicio=2026-11-01T12:00:00Z&fim=2026-11-01T10:00:00Z]
+CASO 300 | APROVADO | 0.037 s | src/app/tests/test_visitors.py::test_filtros_invalidos_do_historico[pagina=0]
+CASO 301 | APROVADO | 0.145 s | src/app/tests/test_visitors.py::test_visitante_usa_login_jwt_original_sem_promocao
+CASO 302 | APROVADO | 0.147 s | src/app/tests/test_visitors.py::test_cadastro_publico_original_nao_e_fechado_pelo_novo_perfil
+CASO 303 | APROVADO | 0.150 s | src/app/tests/test_visitors.py::test_falha_no_cadastro_visitante_reverte_todas_as_inclusoes[offline]
+CASO 304 | APROVADO | 0.151 s | src/app/tests/test_visitors.py::test_falha_no_cadastro_visitante_reverte_todas_as_inclusoes[conflito]
+CASO 305 | APROVADO | 0.042 s | src/app/tests/test_visitors.py::test_falha_de_gravacao_preserva_autorizacao_existente[editar]
+CASO 306 | APROVADO | 0.039 s | src/app/tests/test_visitors.py::test_falha_de_gravacao_preserva_autorizacao_existente[revogar]
+CASO 307 | APROVADO | 0.036 s | src/app/tests/test_visitors.py::test_falha_no_vinculo_do_historico_reverte_registro_e_nao_abre_porta
+CASO 308 | APROVADO | 0.026 s | src/app/tests/test_visitors.py::test_json_invalido_e_tratado_apenas_nas_rotas_novas[[]-application/json]
+CASO 309 | APROVADO | 0.026 s | src/app/tests/test_visitors.py::test_json_invalido_e_tratado_apenas_nas_rotas_novas[null-application/json]
+CASO 310 | APROVADO | 0.026 s | src/app/tests/test_visitors.py::test_json_invalido_e_tratado_apenas_nas_rotas_novas[{-application/json]
+CASO 311 | APROVADO | 0.026 s | src/app/tests/test_visitors.py::test_json_invalido_e_tratado_apenas_nas_rotas_novas[texto-text/plain]
+CASO 312 | APROVADO | 0.067 s | src/app/tests/test_visitors.py::test_visitante_pode_ter_varios_locais_e_edicao_tem_efeito_no_proximo_acesso
+CASO 313 | APROVADO | 0.039 s | src/app/tests/test_visitors.py::test_locais_de_visitante_nao_restringem_usuario_comum_ou_root[root]
+CASO 314 | APROVADO | 0.035 s | src/app/tests/test_visitors.py::test_locais_de_visitante_nao_restringem_usuario_comum_ou_root[user]
+CASO 315 | APROVADO | 0.035 s | src/app/tests/test_visitors.py::test_leitura_rfid_de_visitante_mantem_mac_e_resposta_originais[False]
+CASO 316 | APROVADO | 0.035 s | src/app/tests/test_visitors.py::test_leitura_rfid_de_visitante_mantem_mac_e_resposta_originais[True]
+CASO 317 | APROVADO | 0.174 s | src/app/tests/test_visitors.py::test_uid_numerica_herdada_permanece_aceita_sem_alterar_tipo_da_coluna
+
+FIM DO RELATÓRIO — 317 casos, 307 aprovados e 10 falhas preexistentes.

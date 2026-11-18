@@ -1,0 +1,2074 @@
+SAFE-TRACK — DOCUMENTAÇÃO COMPLETA DOS TESTES DA ETAPA 1
+============================================================================
+Branch: desenvolvimento. Commit de referência: 08990a2.
+Execução de referência: 17/11/2026 15:46:53 (America/Sao_Paulo).
+Formato: texto simples UTF-8. Catálogo de todos os 181 casos, incluindo as parametrizações.
+
+Este documento usa o JUnit, a cobertura e os tempos da execução já realizada.
+A geração deste TXT conferiu apenas a coleta dos IDs e parâmetros atuais;
+não reexecutou os testes nem aplicou correções na API.
+
+1. RESULTADO GERAL
+----------------------------------------------------------------------------
+Executados: 181. Aprovados: 171. Reprovados: 10.
+Erros de coleta/execução: 0. Ignorados: 0. Código de saída da suíte: 1.
+Tempo apresentado pelo Pytest: 9,05 s. Tempo total no JUnit: 9.040 s.
+Avisos: 71, sem supressão.
+Linhas: 691/714 — 96.78%.
+Ramos: 127/138 — 92.03%.
+Cobertura combinada: 96.01%.
+Cobertura inclui linhas percorridas por testes reprovados; não prova correção.
+Escopo: src/app (exceto testes), src/database e src/logs.
+Não inclui bibliotecas externas, firmware, frontend ou o protótipo Dash separado.
+
+Resumo por arquivo:
+  test_access.py: 7 casos; 7 aprovados; 0 reprovados.
+  test_auth.py: 49 casos; 46 aprovados; 3 reprovados.
+  test_http.py: 14 casos; 10 aprovados; 4 reprovados.
+  test_inventory.py: 63 casos; 60 aprovados; 3 reprovados.
+  test_models.py: 22 casos; 22 aprovados; 0 reprovados.
+  test_mqtt.py: 26 casos; 26 aprovados; 0 reprovados.
+
+2. AMBIENTE, PREPARAÇÃO E PRESERVAÇÃO
+----------------------------------------------------------------------------
+A coleta inicial parava em ModuleNotFoundError: No module named flask.
+O Python do sistema tinha pytest 7.4.4, mas não as dependências da aplicação.
+Foi criado .venv e instalado requirements-dev.txt, que inclui os requisitos
+originais da aplicação e as dependências de testes. pip check passou.
+O Python e os pacotes do sistema não foram modificados.
+
+Os cinco casos de test_login_dinamico foram mantidos e adaptados à rota
+existente /login, com usuários fictícios. Para e-mail inexistente/vazio,
+a expectativa agora é 401, conforme o código original, sem token retornado.
+A aplicação não foi modificada para acomodar os testes.
+
+Fixtures são instaladas antes do primeiro import da aplicação:
+  - SQLite em memória para a API e dados recriados por caso.
+  - Bootstrap original executado somente no banco descartável.
+  - Chaves JWT/sessão e usuários exclusivamente de teste.
+  - Bancos em arquivos permitidos somente na área temporária do Pytest.
+  - Uploads e arquivos de log limitados à área temporária.
+  - Logger original preservado; apenas o caminho visto pela fixture muda.
+  - Conexões reais de socket e resolução DNS bloqueadas; MQTT/HTTP externo com mocks.
+  - Engine separado com FKs ativas para testes de modelos; engine da API mantém FKs=0.
+
+Arquivos de produção verificados por SHA-256: 54; diferenças: 0.
+Uploads existentes verificados por metadados: 9; diferenças: 0.
+src/database/hermes.db estava ausente e não foi criado pelos testes.
+Não foram criados logs no checkout original.
+MAC continua sendo o único critério de autorização de dispositivo em /cadastrar_rfid.
+Docker, Compose, firmware, modelos, contratos e apresentação dos logs não foram alterados.
+
+3. ARQUIVOS DA ETAPA
+----------------------------------------------------------------------------
+Modificados:
+  pytest.ini — caminhos, descoberta de testes, validação e marcador defeito_api.
+  src/app/tests/test_auth.py — correção dos cinco casos e ampliação da autenticação.
+Criados:
+  requirements-dev.txt — dependências do ambiente de testes.
+  .coveragerc — medição de linhas e ramos.
+  src/app/tests/conftest.py — isolamento, fixtures e tempos HTTP.
+  src/app/tests/test_access.py — fluxo original de acesso e histórico.
+  src/app/tests/test_http.py — HTTP, logs, exceções e bloqueios.
+  src/app/tests/test_inventory.py — objetos, locais, tags, MAC, imagens e transações.
+  src/app/tests/test_models.py — restrições e relacionamentos declarados.
+  src/app/tests/test_mqtt.py — contratos e falhas de comunicação simuladas.
+  documents/etapa1_pytest_preservacao.md — relatório anterior da etapa.
+  documents/documentacao_completa_testes_etapa1.txt — este catálogo.
+O arquivo src/app/tests/ __init__.py, com espaço no nome, foi preservado.
+
+4. TEMPOS DO CLIENTE FLASK
+----------------------------------------------------------------------------
+Requisições medidas: 132.
+Média: 14.367 ms. Mediana: 3.873 ms.
+P95: 116.325 ms. Máximo: 197.166 ms.
+Esses tempos são de chamadas em processo, com cobertura ativa.
+Não são benchmark de produção ou latência física ESP32/broker/servidor.
+O tempo individual do JUnit no catálogo inclui preparação, execução e limpeza;
+ele não deve ser interpretado como duração de uma única requisição HTTP.
+
+5. COMO LER O CATÁLOGO
+----------------------------------------------------------------------------
+Cada entrada abaixo corresponde a um caso efetivamente presente no JUnit.
+Casos parametrizados são listados individualmente, sem agrupamentos que omitam IDs.
+Verificações previstas descrevem as asserções do teste. Em um caso reprovado,
+as verificações depois da primeira falha podem não ter sido executadas.
+defeito_api é só uma etiqueta: não pula testes nem converte falhas em sucesso.
+Senhas/hashes fictícios nos parâmetros são omitidos; nenhum token ou senha real é listado.
+Testes de caracterização de limitações confirmam o comportamento atual e
+não devem ser lidos como comprovação de robustez ou validação de hardware.
+
+6. CATÁLOGO INDIVIDUAL DOS 181 CASOS
+============================================================================
+
+ARQUIVO: src/app/tests/test_access.py
+----------------------------------------------------------------------------
+
+CASO 001 — APROVADO
+ID Pytest: src/app/tests/test_access.py::test_fluxo_original_da_porta_e_historico[credencial_valida]
+Fonte: src/app/tests/test_access.py:9
+Objetivo: Verificar o acesso com credencial válida, conta inativa ou UID desconhecida.
+Parâmetros: {"allowed": true, "mode": "valid", "result": "Liberado", "status": 200}
+Verificações previstas: Confere o status HTTP, o booleano abrir e o único registro de acesso, incluindo UID, local, horário e resultado Liberado/Negado.
+Duração do caso (JUnit): 1.314 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+CASO 002 — APROVADO
+ID Pytest: src/app/tests/test_access.py::test_fluxo_original_da_porta_e_historico[conta_inativa]
+Fonte: src/app/tests/test_access.py:9
+Objetivo: Verificar o acesso com credencial válida, conta inativa ou UID desconhecida.
+Parâmetros: {"allowed": false, "mode": "inactive", "result": "Negado", "status": 403}
+Verificações previstas: Confere o status HTTP, o booleano abrir e o único registro de acesso, incluindo UID, local, horário e resultado Liberado/Negado.
+Duração do caso (JUnit): 0.032 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+CASO 003 — APROVADO
+ID Pytest: src/app/tests/test_access.py::test_fluxo_original_da_porta_e_historico[credencial_desconhecida]
+Fonte: src/app/tests/test_access.py:9
+Objetivo: Verificar o acesso com credencial válida, conta inativa ou UID desconhecida.
+Parâmetros: {"allowed": false, "mode": "unknown", "result": "Negado", "status": 403}
+Verificações previstas: Confere o status HTTP, o booleano abrir e o único registro de acesso, incluindo UID, local, horário e resultado Liberado/Negado.
+Duração do caso (JUnit): 0.027 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+CASO 004 — APROVADO
+ID Pytest: src/app/tests/test_access.py::test_porta_sem_local_valido_nao_cria_evento[payload0-400]
+Fonte: src/app/tests/test_access.py:28
+Objetivo: Verificar corpo vazio ou local ausente/inexistente na solicitação de acesso.
+Parâmetros: {"payload": {}, "status": 400}
+Verificações previstas: Exige o status parametrizado e ausência de novos registros de acesso.
+Duração do caso (JUnit): 0.029 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+CASO 005 — APROVADO
+ID Pytest: src/app/tests/test_access.py::test_porta_sem_local_valido_nao_cria_evento[payload1-404]
+Fonte: src/app/tests/test_access.py:28
+Objetivo: Verificar corpo vazio ou local ausente/inexistente na solicitação de acesso.
+Parâmetros: {"payload": {"local": 999, "uid_solicitante": "c3d4e5f6"}, "status": 404}
+Verificações previstas: Exige o status parametrizado e ausência de novos registros de acesso.
+Duração do caso (JUnit): 0.024 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+CASO 006 — APROVADO
+ID Pytest: src/app/tests/test_access.py::test_porta_sem_local_valido_nao_cria_evento[payload2-404]
+Fonte: src/app/tests/test_access.py:28
+Objetivo: Verificar corpo vazio ou local ausente/inexistente na solicitação de acesso.
+Parâmetros: {"payload": {"uid_solicitante": "c3d4e5f6"}, "status": 404}
+Verificações previstas: Exige o status parametrizado e ausência de novos registros de acesso.
+Duração do caso (JUnit): 0.027 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+CASO 007 — APROVADO
+ID Pytest: src/app/tests/test_access.py::test_falha_ao_persistir_acesso_nao_abre_porta
+Fonte: src/app/tests/test_access.py:34
+Objetivo: Simular falha de commit ao registrar uma tentativa de acesso.
+Parâmetros: sem parametrização.
+Verificações previstas: Exige HTTP 500, ausência de abrir=true, chamada de rollback e nenhum evento parcialmente persistido.
+Duração do caso (JUnit): 0.026 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+ARQUIVO: src/app/tests/test_auth.py
+----------------------------------------------------------------------------
+
+CASO 008 — APROVADO
+ID Pytest: src/app/tests/test_auth.py::test_login_dinamico[credenciais_validas]
+Fonte: src/app/tests/test_auth.py:13
+Objetivo: Preservar os cinco cenários originais de login com dados fictícios e a rota existente /login.
+Parâmetros: {"email": "root@example.test", "senha": "[dado fictício omitido; cenário identificado pelo nome do caso]", "status_esperado": 200}
+Verificações previstas: Exige o status parametrizado; credenciais válidas retornam JWT e perfil roots; falhas não retornam access_token.
+Duração do caso (JUnit): 0.134 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+CASO 009 — APROVADO
+ID Pytest: src/app/tests/test_auth.py::test_login_dinamico[senha_incorreta]
+Fonte: src/app/tests/test_auth.py:13
+Objetivo: Preservar os cinco cenários originais de login com dados fictícios e a rota existente /login.
+Parâmetros: {"email": "root@example.test", "senha": "[dado fictício omitido; cenário identificado pelo nome do caso]", "status_esperado": 401}
+Verificações previstas: Exige o status parametrizado; credenciais válidas retornam JWT e perfil roots; falhas não retornam access_token.
+Duração do caso (JUnit): 0.130 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+CASO 010 — APROVADO
+ID Pytest: src/app/tests/test_auth.py::test_login_dinamico[outra_senha_incorreta]
+Fonte: src/app/tests/test_auth.py:13
+Objetivo: Preservar os cinco cenários originais de login com dados fictícios e a rota existente /login.
+Parâmetros: {"email": "root@example.test", "senha": "[dado fictício omitido; cenário identificado pelo nome do caso]", "status_esperado": 401}
+Verificações previstas: Exige o status parametrizado; credenciais válidas retornam JWT e perfil roots; falhas não retornam access_token.
+Duração do caso (JUnit): 0.134 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+CASO 011 — APROVADO
+ID Pytest: src/app/tests/test_auth.py::test_login_dinamico[usuario_inexistente]
+Fonte: src/app/tests/test_auth.py:13
+Objetivo: Preservar os cinco cenários originais de login com dados fictícios e a rota existente /login.
+Parâmetros: {"email": "fantasma@example.test", "senha": "[dado fictício omitido; cenário identificado pelo nome do caso]", "status_esperado": 401}
+Verificações previstas: Exige o status parametrizado; credenciais válidas retornam JWT e perfil roots; falhas não retornam access_token.
+Duração do caso (JUnit): 0.036 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+CASO 012 — APROVADO
+ID Pytest: src/app/tests/test_auth.py::test_login_dinamico[email_vazio]
+Fonte: src/app/tests/test_auth.py:13
+Objetivo: Preservar os cinco cenários originais de login com dados fictícios e a rota existente /login.
+Parâmetros: {"email": "", "senha": "[dado fictício omitido; cenário identificado pelo nome do caso]", "status_esperado": 401}
+Verificações previstas: Exige o status parametrizado; credenciais válidas retornam JWT e perfil roots; falhas não retornam access_token.
+Duração do caso (JUnit): 0.038 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+CASO 013 — APROVADO
+ID Pytest: src/app/tests/test_auth.py::test_login_emite_jwt_com_identidade_e_expiracao[root]
+Fonte: src/app/tests/test_auth.py:25
+Objetivo: Verificar emissão de JWT para Root e usuário comum.
+Parâmetros: {"role": "root"}
+Verificações previstas: Decodifica o JWT e confere identidade textual, tipo access e expiração posterior à emissão.
+Duração do caso (JUnit): 0.178 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+CASO 014 — APROVADO
+ID Pytest: src/app/tests/test_auth.py::test_login_emite_jwt_com_identidade_e_expiracao[user]
+Fonte: src/app/tests/test_auth.py:25
+Objetivo: Verificar emissão de JWT para Root e usuário comum.
+Parâmetros: {"role": "user"}
+Verificações previstas: Decodifica o JWT e confere identidade textual, tipo access e expiração posterior à emissão.
+Duração do caso (JUnit): 0.175 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+CASO 015 — APROVADO
+ID Pytest: src/app/tests/test_auth.py::test_cadastro_publico_preserva_contrato_e_armazena_hash
+Fonte: src/app/tests/test_auth.py:35
+Objetivo: Verificar cadastro público de usuário comum e autenticação posterior.
+Parâmetros: sem parametrização.
+Verificações previstas: Exige HTTP 201, tipo users, senha armazenada como hash verificável e login posterior com HTTP 200.
+Duração do caso (JUnit): 0.361 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+CASO 016 — APROVADO
+ID Pytest: src/app/tests/test_auth.py::test_cadastro_incompleto_nao_persiste[vazio]
+Fonte: src/app/tests/test_auth.py:50
+Objetivo: Verificar cadastro de usuário com campos ausentes.
+Parâmetros: {"payload": {}}
+Verificações previstas: Exige HTTP 400 e nenhum usuário persistido.
+Duração do caso (JUnit): 0.021 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+CASO 017 — APROVADO
+ID Pytest: src/app/tests/test_auth.py::test_cadastro_incompleto_nao_persiste[somente_nome]
+Fonte: src/app/tests/test_auth.py:50
+Objetivo: Verificar cadastro de usuário com campos ausentes.
+Parâmetros: {"payload": {"nome": "Teste"}}
+Verificações previstas: Exige HTTP 400 e nenhum usuário persistido.
+Duração do caso (JUnit): 0.017 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+CASO 018 — APROVADO
+ID Pytest: src/app/tests/test_auth.py::test_cadastro_incompleto_nao_persiste[sem_senha]
+Fonte: src/app/tests/test_auth.py:50
+Objetivo: Verificar cadastro de usuário com campos ausentes.
+Parâmetros: {"payload": {"email": "novo@example.test", "nome": "Teste"}}
+Verificações previstas: Exige HTTP 400 e nenhum usuário persistido.
+Duração do caso (JUnit): 0.016 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+CASO 019 — APROVADO
+ID Pytest: src/app/tests/test_auth.py::test_cadastro_incompleto_nao_persiste[sem_nome]
+Fonte: src/app/tests/test_auth.py:50
+Objetivo: Verificar cadastro de usuário com campos ausentes.
+Parâmetros: {"payload": {"email": "novo@example.test", "senha": "[dado fictício omitido; cenário identificado pelo nome do caso]"}}
+Verificações previstas: Exige HTTP 400 e nenhum usuário persistido.
+Duração do caso (JUnit): 0.017 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+CASO 020 — REPROVADO
+ID Pytest: src/app/tests/test_auth.py::test_cadastro_email_duplicado_deve_retornar_400
+Fonte: src/app/tests/test_auth.py:57
+Objetivo: Verificar a resposta pretendida para cadastro com e-mail já existente.
+Parâmetros: sem parametrização.
+Verificações previstas: Exige HTTP 400 e manutenção dos três usuários da fixture. A verificação de contagem fica após a asserção de status.
+Duração do caso (JUnit): 0.023 s.
+Marcador defeito_api: sim.
+Resultado observado: assert 500 == 400
+A asserção permaneceu ativa; nenhuma correção da aplicação foi aplicada.
+
+CASO 021 — APROVADO
+ID Pytest: src/app/tests/test_auth.py::test_permissoes_administrativas_existentes[None-401-post-/registrar_root]
+Fonte: src/app/tests/test_auth.py:71
+Objetivo: Verificar permissões das rotas administrativas já protegidas.
+Parâmetros: {"method": "post", "path": "/registrar_root", "role": null, "status": 401}
+Verificações previstas: Executa método/rota parametrizados; ausência de JWT deve retornar 401 e usuário comum deve receber 403.
+Duração do caso (JUnit): 0.021 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+CASO 022 — APROVADO
+ID Pytest: src/app/tests/test_auth.py::test_permissoes_administrativas_existentes[None-401-post-/atribuir_rfid_usuario]
+Fonte: src/app/tests/test_auth.py:71
+Objetivo: Verificar permissões das rotas administrativas já protegidas.
+Parâmetros: {"method": "post", "path": "/atribuir_rfid_usuario", "role": null, "status": 401}
+Verificações previstas: Executa método/rota parametrizados; ausência de JWT deve retornar 401 e usuário comum deve receber 403.
+Duração do caso (JUnit): 0.021 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+CASO 023 — APROVADO
+ID Pytest: src/app/tests/test_auth.py::test_permissoes_administrativas_existentes[None-401-get-/visualizar_todos_usuarios]
+Fonte: src/app/tests/test_auth.py:71
+Objetivo: Verificar permissões das rotas administrativas já protegidas.
+Parâmetros: {"method": "get", "path": "/visualizar_todos_usuarios", "role": null, "status": 401}
+Verificações previstas: Executa método/rota parametrizados; ausência de JWT deve retornar 401 e usuário comum deve receber 403.
+Duração do caso (JUnit): 0.021 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+CASO 024 — APROVADO
+ID Pytest: src/app/tests/test_auth.py::test_permissoes_administrativas_existentes[None-401-post-/cadastrar_objeto]
+Fonte: src/app/tests/test_auth.py:71
+Objetivo: Verificar permissões das rotas administrativas já protegidas.
+Parâmetros: {"method": "post", "path": "/cadastrar_objeto", "role": null, "status": 401}
+Verificações previstas: Executa método/rota parametrizados; ausência de JWT deve retornar 401 e usuário comum deve receber 403.
+Duração do caso (JUnit): 0.021 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+CASO 025 — APROVADO
+ID Pytest: src/app/tests/test_auth.py::test_permissoes_administrativas_existentes[None-401-put-/recadastrar_objeto]
+Fonte: src/app/tests/test_auth.py:71
+Objetivo: Verificar permissões das rotas administrativas já protegidas.
+Parâmetros: {"method": "put", "path": "/recadastrar_objeto", "role": null, "status": 401}
+Verificações previstas: Executa método/rota parametrizados; ausência de JWT deve retornar 401 e usuário comum deve receber 403.
+Duração do caso (JUnit): 0.021 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+CASO 026 — APROVADO
+ID Pytest: src/app/tests/test_auth.py::test_permissoes_administrativas_existentes[None-401-delete-/excluir_objeto]
+Fonte: src/app/tests/test_auth.py:71
+Objetivo: Verificar permissões das rotas administrativas já protegidas.
+Parâmetros: {"method": "delete", "path": "/excluir_objeto", "role": null, "status": 401}
+Verificações previstas: Executa método/rota parametrizados; ausência de JWT deve retornar 401 e usuário comum deve receber 403.
+Duração do caso (JUnit): 0.021 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+CASO 027 — APROVADO
+ID Pytest: src/app/tests/test_auth.py::test_permissoes_administrativas_existentes[None-401-post-/cadastrar_local]
+Fonte: src/app/tests/test_auth.py:71
+Objetivo: Verificar permissões das rotas administrativas já protegidas.
+Parâmetros: {"method": "post", "path": "/cadastrar_local", "role": null, "status": 401}
+Verificações previstas: Executa método/rota parametrizados; ausência de JWT deve retornar 401 e usuário comum deve receber 403.
+Duração do caso (JUnit): 0.021 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+CASO 028 — APROVADO
+ID Pytest: src/app/tests/test_auth.py::test_permissoes_administrativas_existentes[None-401-put-/editar_local]
+Fonte: src/app/tests/test_auth.py:71
+Objetivo: Verificar permissões das rotas administrativas já protegidas.
+Parâmetros: {"method": "put", "path": "/editar_local", "role": null, "status": 401}
+Verificações previstas: Executa método/rota parametrizados; ausência de JWT deve retornar 401 e usuário comum deve receber 403.
+Duração do caso (JUnit): 0.021 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+CASO 029 — APROVADO
+ID Pytest: src/app/tests/test_auth.py::test_permissoes_administrativas_existentes[None-401-delete-/excluir_rfid]
+Fonte: src/app/tests/test_auth.py:71
+Objetivo: Verificar permissões das rotas administrativas já protegidas.
+Parâmetros: {"method": "delete", "path": "/excluir_rfid", "role": null, "status": 401}
+Verificações previstas: Executa método/rota parametrizados; ausência de JWT deve retornar 401 e usuário comum deve receber 403.
+Duração do caso (JUnit): 0.021 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+CASO 030 — APROVADO
+ID Pytest: src/app/tests/test_auth.py::test_permissoes_administrativas_existentes[user-403-post-/registrar_root]
+Fonte: src/app/tests/test_auth.py:71
+Objetivo: Verificar permissões das rotas administrativas já protegidas.
+Parâmetros: {"method": "post", "path": "/registrar_root", "role": "user", "status": 403}
+Verificações previstas: Executa método/rota parametrizados; ausência de JWT deve retornar 401 e usuário comum deve receber 403.
+Duração do caso (JUnit): 0.024 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+CASO 031 — APROVADO
+ID Pytest: src/app/tests/test_auth.py::test_permissoes_administrativas_existentes[user-403-post-/atribuir_rfid_usuario]
+Fonte: src/app/tests/test_auth.py:71
+Objetivo: Verificar permissões das rotas administrativas já protegidas.
+Parâmetros: {"method": "post", "path": "/atribuir_rfid_usuario", "role": "user", "status": 403}
+Verificações previstas: Executa método/rota parametrizados; ausência de JWT deve retornar 401 e usuário comum deve receber 403.
+Duração do caso (JUnit): 0.023 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+CASO 032 — APROVADO
+ID Pytest: src/app/tests/test_auth.py::test_permissoes_administrativas_existentes[user-403-get-/visualizar_todos_usuarios]
+Fonte: src/app/tests/test_auth.py:71
+Objetivo: Verificar permissões das rotas administrativas já protegidas.
+Parâmetros: {"method": "get", "path": "/visualizar_todos_usuarios", "role": "user", "status": 403}
+Verificações previstas: Executa método/rota parametrizados; ausência de JWT deve retornar 401 e usuário comum deve receber 403.
+Duração do caso (JUnit): 0.023 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+CASO 033 — APROVADO
+ID Pytest: src/app/tests/test_auth.py::test_permissoes_administrativas_existentes[user-403-post-/cadastrar_objeto]
+Fonte: src/app/tests/test_auth.py:71
+Objetivo: Verificar permissões das rotas administrativas já protegidas.
+Parâmetros: {"method": "post", "path": "/cadastrar_objeto", "role": "user", "status": 403}
+Verificações previstas: Executa método/rota parametrizados; ausência de JWT deve retornar 401 e usuário comum deve receber 403.
+Duração do caso (JUnit): 0.023 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+CASO 034 — APROVADO
+ID Pytest: src/app/tests/test_auth.py::test_permissoes_administrativas_existentes[user-403-put-/recadastrar_objeto]
+Fonte: src/app/tests/test_auth.py:71
+Objetivo: Verificar permissões das rotas administrativas já protegidas.
+Parâmetros: {"method": "put", "path": "/recadastrar_objeto", "role": "user", "status": 403}
+Verificações previstas: Executa método/rota parametrizados; ausência de JWT deve retornar 401 e usuário comum deve receber 403.
+Duração do caso (JUnit): 0.023 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+CASO 035 — APROVADO
+ID Pytest: src/app/tests/test_auth.py::test_permissoes_administrativas_existentes[user-403-delete-/excluir_objeto]
+Fonte: src/app/tests/test_auth.py:71
+Objetivo: Verificar permissões das rotas administrativas já protegidas.
+Parâmetros: {"method": "delete", "path": "/excluir_objeto", "role": "user", "status": 403}
+Verificações previstas: Executa método/rota parametrizados; ausência de JWT deve retornar 401 e usuário comum deve receber 403.
+Duração do caso (JUnit): 0.022 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+CASO 036 — APROVADO
+ID Pytest: src/app/tests/test_auth.py::test_permissoes_administrativas_existentes[user-403-post-/cadastrar_local]
+Fonte: src/app/tests/test_auth.py:71
+Objetivo: Verificar permissões das rotas administrativas já protegidas.
+Parâmetros: {"method": "post", "path": "/cadastrar_local", "role": "user", "status": 403}
+Verificações previstas: Executa método/rota parametrizados; ausência de JWT deve retornar 401 e usuário comum deve receber 403.
+Duração do caso (JUnit): 0.023 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+CASO 037 — APROVADO
+ID Pytest: src/app/tests/test_auth.py::test_permissoes_administrativas_existentes[user-403-put-/editar_local]
+Fonte: src/app/tests/test_auth.py:71
+Objetivo: Verificar permissões das rotas administrativas já protegidas.
+Parâmetros: {"method": "put", "path": "/editar_local", "role": "user", "status": 403}
+Verificações previstas: Executa método/rota parametrizados; ausência de JWT deve retornar 401 e usuário comum deve receber 403.
+Duração do caso (JUnit): 0.022 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+CASO 038 — APROVADO
+ID Pytest: src/app/tests/test_auth.py::test_permissoes_administrativas_existentes[user-403-delete-/excluir_rfid]
+Fonte: src/app/tests/test_auth.py:71
+Objetivo: Verificar permissões das rotas administrativas já protegidas.
+Parâmetros: {"method": "delete", "path": "/excluir_rfid", "role": "user", "status": 403}
+Verificações previstas: Executa método/rota parametrizados; ausência de JWT deve retornar 401 e usuário comum deve receber 403.
+Duração do caso (JUnit): 0.022 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+CASO 039 — APROVADO
+ID Pytest: src/app/tests/test_auth.py::test_jwt_invalido_nao_acessa_rota_protegida[expired-401]
+Fonte: src/app/tests/test_auth.py:77
+Objetivo: Verificar JWT expirado, malformado, com assinatura incorreta ou de tipo refresh.
+Parâmetros: {"kind": "expired", "status": 401}
+Verificações previstas: Exige o status parametrizado e ausência da lista de usuários na resposta.
+Duração do caso (JUnit): 0.020 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+CASO 040 — APROVADO
+ID Pytest: src/app/tests/test_auth.py::test_jwt_invalido_nao_acessa_rota_protegida[malformed-422]
+Fonte: src/app/tests/test_auth.py:77
+Objetivo: Verificar JWT expirado, malformado, com assinatura incorreta ou de tipo refresh.
+Parâmetros: {"kind": "malformed", "status": 422}
+Verificações previstas: Exige o status parametrizado e ausência da lista de usuários na resposta.
+Duração do caso (JUnit): 0.017 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+CASO 041 — APROVADO
+ID Pytest: src/app/tests/test_auth.py::test_jwt_invalido_nao_acessa_rota_protegida[wrong_signature-422]
+Fonte: src/app/tests/test_auth.py:77
+Objetivo: Verificar JWT expirado, malformado, com assinatura incorreta ou de tipo refresh.
+Parâmetros: {"kind": "wrong_signature", "status": 422}
+Verificações previstas: Exige o status parametrizado e ausência da lista de usuários na resposta.
+Duração do caso (JUnit): 0.019 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+CASO 042 — APROVADO
+ID Pytest: src/app/tests/test_auth.py::test_jwt_invalido_nao_acessa_rota_protegida[refresh-422]
+Fonte: src/app/tests/test_auth.py:77
+Objetivo: Verificar JWT expirado, malformado, com assinatura incorreta ou de tipo refresh.
+Parâmetros: {"kind": "refresh", "status": 422}
+Verificações previstas: Exige o status parametrizado e ausência da lista de usuários na resposta.
+Duração do caso (JUnit): 0.022 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+CASO 043 — APROVADO
+ID Pytest: src/app/tests/test_auth.py::test_callback_existente_rejeita_jti_na_blocklist_da_aplicacao
+Fonte: src/app/tests/test_auth.py:93
+Objetivo: Verificar o callback original de revogação com JTI inserido no conjunto que ele consulta.
+Parâmetros: sem parametrização.
+Verificações previstas: Uma consulta protegida com esse JWT deve receber HTTP 401.
+Duração do caso (JUnit): 0.035 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+CASO 044 — APROVADO
+ID Pytest: src/app/tests/test_auth.py::test_logout_registra_jti_no_conjunto_da_rota
+Fonte: src/app/tests/test_auth.py:102
+Objetivo: Verificar a operação que o logout efetivamente implementa.
+Parâmetros: sem parametrização.
+Verificações previstas: Exige HTTP 200 no logout e presença do JTI em auth.BLOCKLIST. Este caso não comprova a rejeição posterior do token.
+Duração do caso (JUnit): 0.043 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+CASO 045 — REPROVADO
+ID Pytest: src/app/tests/test_auth.py::test_token_deve_ser_rejeitado_apos_logout
+Fonte: src/app/tests/test_auth.py:112
+Objetivo: Verificar se o logout impede uso posterior do mesmo JWT.
+Parâmetros: sem parametrização.
+Verificações previstas: Após logout com HTTP 200, a consulta protegida deve receber HTTP 401.
+Duração do caso (JUnit): 0.051 s.
+Marcador defeito_api: sim.
+Resultado observado: assert 200 == 401
+A asserção permaneceu ativa; nenhuma correção da aplicação foi aplicada.
+
+CASO 046 — REPROVADO
+ID Pytest: src/app/tests/test_auth.py::test_root_pode_cadastrar_outro_root_valido
+Fonte: src/app/tests/test_auth.py:119
+Objetivo: Verificar o cadastro de um novo Root por administrador existente.
+Parâmetros: sem parametrização.
+Verificações previstas: Exige HTTP 201, dois Roots no banco e login do novo administrador com HTTP 200. Contagem e login ficam após a primeira asserção.
+Duração do caso (JUnit): 0.233 s.
+Marcador defeito_api: sim.
+Resultado observado: assert 500 == 201
+A asserção permaneceu ativa; nenhuma correção da aplicação foi aplicada.
+
+CASO 047 — APROVADO
+ID Pytest: src/app/tests/test_auth.py::test_associacao_usuario_rfid_rejeita_conflitos[payload0-400]
+Fonte: src/app/tests/test_auth.py:134
+Objetivo: Verificar associação RFID com corpo vazio, usuário/tag inexistente, ocupação ou conta inativa.
+Parâmetros: {"payload": {}, "status": 400}
+Verificações previstas: Exige o status definido para o payload parametrizado, sem introduzir novos campos ou autenticação de dispositivo.
+Duração do caso (JUnit): 0.049 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+CASO 048 — APROVADO
+ID Pytest: src/app/tests/test_auth.py::test_associacao_usuario_rfid_rejeita_conflitos[payload1-404]
+Fonte: src/app/tests/test_auth.py:134
+Objetivo: Verificar associação RFID com corpo vazio, usuário/tag inexistente, ocupação ou conta inativa.
+Parâmetros: {"payload": {"id_usuario": 999, "uid_usuario": "b2c3d4e5"}, "status": 404}
+Verificações previstas: Exige o status definido para o payload parametrizado, sem introduzir novos campos ou autenticação de dispositivo.
+Duração do caso (JUnit): 0.050 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+CASO 049 — APROVADO
+ID Pytest: src/app/tests/test_auth.py::test_associacao_usuario_rfid_rejeita_conflitos[payload2-404]
+Fonte: src/app/tests/test_auth.py:134
+Objetivo: Verificar associação RFID com corpo vazio, usuário/tag inexistente, ocupação ou conta inativa.
+Parâmetros: {"payload": {"id_usuario": 1, "uid_usuario": "nao-cadastrada"}, "status": 404}
+Verificações previstas: Exige o status definido para o payload parametrizado, sem introduzir novos campos ou autenticação de dispositivo.
+Duração do caso (JUnit): 0.052 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+CASO 050 — APROVADO
+ID Pytest: src/app/tests/test_auth.py::test_associacao_usuario_rfid_rejeita_conflitos[payload3-409]
+Fonte: src/app/tests/test_auth.py:134
+Objetivo: Verificar associação RFID com corpo vazio, usuário/tag inexistente, ocupação ou conta inativa.
+Parâmetros: {"payload": {"id_usuario": 1, "uid_usuario": "a1b2c3d4"}, "status": 409}
+Verificações previstas: Exige o status definido para o payload parametrizado, sem introduzir novos campos ou autenticação de dispositivo.
+Duração do caso (JUnit): 0.054 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+CASO 051 — APROVADO
+ID Pytest: src/app/tests/test_auth.py::test_associacao_usuario_rfid_rejeita_conflitos[payload4-409]
+Fonte: src/app/tests/test_auth.py:134
+Objetivo: Verificar associação RFID com corpo vazio, usuário/tag inexistente, ocupação ou conta inativa.
+Parâmetros: {"payload": {"id_usuario": 1, "uid_usuario": "c3d4e5f6"}, "status": 409}
+Verificações previstas: Exige o status definido para o payload parametrizado, sem introduzir novos campos ou autenticação de dispositivo.
+Duração do caso (JUnit): 0.054 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+CASO 052 — APROVADO
+ID Pytest: src/app/tests/test_auth.py::test_associacao_usuario_rfid_rejeita_conflitos[payload5-404]
+Fonte: src/app/tests/test_auth.py:134
+Objetivo: Verificar associação RFID com corpo vazio, usuário/tag inexistente, ocupação ou conta inativa.
+Parâmetros: {"payload": {"id_usuario": 3, "uid_usuario": "b2c3d4e5"}, "status": 404}
+Verificações previstas: Exige o status definido para o payload parametrizado, sem introduzir novos campos ou autenticação de dispositivo.
+Duração do caso (JUnit): 0.048 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+CASO 053 — APROVADO
+ID Pytest: src/app/tests/test_auth.py::test_associacao_usuario_rfid_valida
+Fonte: src/app/tests/test_auth.py:139
+Objetivo: Associar uma tag livre ao usuário Root.
+Parâmetros: sem parametrização.
+Verificações previstas: Exige HTTP 200 e persistência do vínculo com a UID indicada.
+Duração do caso (JUnit): 0.060 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+CASO 054 — APROVADO
+ID Pytest: src/app/tests/test_auth.py::test_consulta_usuarios_root_nao_retorna_hashes
+Fonte: src/app/tests/test_auth.py:146
+Objetivo: Consultar usuários como Root e verificar os campos retornados.
+Parâmetros: sem parametrização.
+Verificações previstas: Exige HTTP 200, três usuários e somente id, nome, email e credencial_rfid em cada item, sem hashes.
+Duração do caso (JUnit): 0.041 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+CASO 055 — APROVADO
+ID Pytest: src/app/tests/test_auth.py::test_busca_usuario_por_uid_preserva_rota_publica[c3d4e5f6-200]
+Fonte: src/app/tests/test_auth.py:154
+Objetivo: Consultar usuário por UID sem acrescentar proteção à rota pública original.
+Parâmetros: {"status": 200, "uid": "c3d4e5f6"}
+Verificações previstas: Exige 200 para UID associada e 404 para inexistente; no sucesso confere a credencial retornada.
+Duração do caso (JUnit): 0.046 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+CASO 056 — APROVADO
+ID Pytest: src/app/tests/test_auth.py::test_busca_usuario_por_uid_preserva_rota_publica[inexistente-404]
+Fonte: src/app/tests/test_auth.py:154
+Objetivo: Consultar usuário por UID sem acrescentar proteção à rota pública original.
+Parâmetros: {"status": 404, "uid": "inexistente"}
+Verificações previstas: Exige 200 para UID associada e 404 para inexistente; no sucesso confere a credencial retornada.
+Duração do caso (JUnit): 0.042 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+ARQUIVO: src/app/tests/test_http.py
+----------------------------------------------------------------------------
+
+CASO 057 — APROVADO
+ID Pytest: src/app/tests/test_http.py::test_pagina_inicial_preserva_template_e_javascript
+Fonte: src/app/tests/test_http.py:11
+Objetivo: Verificar que a página inicial original é servida pelo Flask.
+Parâmetros: sem parametrização.
+Verificações previstas: Exige HTTP 200 e presença do campo login_email e da referência a script.js no HTML.
+Duração do caso (JUnit): 0.059 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+CASO 058 — REPROVADO
+ID Pytest: src/app/tests/test_http.py::test_erros_http_preservam_status_original[get-/rota-inexistente-404]
+Fonte: src/app/tests/test_http.py:20
+Objetivo: Verificar URL inexistente ou método não permitido.
+Parâmetros: {"method": "get", "path": "/rota-inexistente", "status": 404}
+Verificações previstas: Exige 404/405 conforme o cenário e, no caso 405, cabeçalho Allow incluindo POST. O cabeçalho só é verificado após o status.
+Duração do caso (JUnit): 0.031 s.
+Marcador defeito_api: sim.
+Resultado observado: assert 500 == 404
+A asserção permaneceu ativa; nenhuma correção da aplicação foi aplicada.
+
+CASO 059 — REPROVADO
+ID Pytest: src/app/tests/test_http.py::test_erros_http_preservam_status_original[get-/login-405]
+Fonte: src/app/tests/test_http.py:20
+Objetivo: Verificar URL inexistente ou método não permitido.
+Parâmetros: {"method": "get", "path": "/login", "status": 405}
+Verificações previstas: Exige 404/405 conforme o cenário e, no caso 405, cabeçalho Allow incluindo POST. O cabeçalho só é verificado após o status.
+Duração do caso (JUnit): 0.031 s.
+Marcador defeito_api: sim.
+Resultado observado: assert 500 == 405
+A asserção permaneceu ativa; nenhuma correção da aplicação foi aplicada.
+
+CASO 060 — REPROVADO
+ID Pytest: src/app/tests/test_http.py::test_erros_de_parse_json_preservam_status[json_malformado]
+Fonte: src/app/tests/test_http.py:30
+Objetivo: Verificar JSON malformado e Content-Type inadequado.
+Parâmetros: {"content_type": "application/json", "payload": "{", "status": 400}
+Verificações previstas: Exige 400 para JSON inválido e 415 para tipo de conteúdo inadequado.
+Duração do caso (JUnit): 0.032 s.
+Marcador defeito_api: sim.
+Resultado observado: assert 500 == 400
+A asserção permaneceu ativa; nenhuma correção da aplicação foi aplicada.
+
+CASO 061 — REPROVADO
+ID Pytest: src/app/tests/test_http.py::test_erros_de_parse_json_preservam_status[content_type_incorreto]
+Fonte: src/app/tests/test_http.py:30
+Objetivo: Verificar JSON malformado e Content-Type inadequado.
+Parâmetros: {"content_type": "text/plain", "payload": "texto", "status": 415}
+Verificações previstas: Exige 400 para JSON inválido e 415 para tipo de conteúdo inadequado.
+Duração do caso (JUnit): 0.030 s.
+Marcador defeito_api: sim.
+Resultado observado: assert 500 == 415
+A asserção permaneceu ativa; nenhuma correção da aplicação foi aplicada.
+
+CASO 062 — APROVADO
+ID Pytest: src/app/tests/test_http.py::test_excecao_inesperada_retorna_resposta_generica
+Fonte: src/app/tests/test_http.py:35
+Objetivo: Simular exceção inesperada durante listagem de locais.
+Parâmetros: sem parametrização.
+Verificações previstas: Exige HTTP 500 e ausência do detalhe fictício interno no corpo da resposta.
+Duração do caso (JUnit): 0.031 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+CASO 063 — APROVADO
+ID Pytest: src/app/tests/test_http.py::test_falha_de_banco_no_cadastro_retorna_500
+Fonte: src/app/tests/test_http.py:44
+Objetivo: Simular falha de commit ao cadastrar usuário.
+Parâmetros: sem parametrização.
+Verificações previstas: Exige resposta HTTP 500 pelo tratamento de exceções existente; o teste não afirma correção de rollback global.
+Duração do caso (JUnit): 0.210 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+CASO 064 — APROVADO
+ID Pytest: src/app/tests/test_http.py::test_logger_original_preserva_mensagem_e_arquivos_temporarios
+Fonte: src/app/tests/test_http.py:50
+Objetivo: Verificar a mensagem original de tráfego e os arquivos gerados pelo logger durante os testes.
+Parâmetros: sem parametrização.
+Verificações previstas: Confere texto INFO, IP, método e rota no debug.log temporário e existência de error.log, mantendo o formatter original.
+Duração do caso (JUnit): 0.032 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+CASO 065 — APROVADO
+ID Pytest: src/app/tests/test_http.py::test_bootstrap_esta_isolado_em_memoria
+Fonte: src/app/tests/test_http.py:58
+Objetivo: Verificar o isolamento da aplicação de teste após o bootstrap original.
+Parâmetros: sem parametrização.
+Verificações previstas: Exige TESTING=True, URI sqlite://, engine em memória e diretório de trabalho dentro da área temporária.
+Duração do caso (JUnit): 0.025 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+CASO 066 — APROVADO
+ID Pytest: src/app/tests/test_http.py::test_bloqueios_impedem_acesso_externo[sqlite]
+Fonte: src/app/tests/test_http.py:66
+Objetivo: Verificar as proteções contra banco, rede, DNS e uploads fora do ambiente autorizado.
+Parâmetros: {"operation": "sqlite"}
+Verificações previstas: A operação parametrizada deve ser bloqueada com AssertionError antes do acesso externo.
+Duração do caso (JUnit): 0.026 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+CASO 067 — APROVADO
+ID Pytest: src/app/tests/test_http.py::test_bloqueios_impedem_acesso_externo[sqlite_uri]
+Fonte: src/app/tests/test_http.py:66
+Objetivo: Verificar as proteções contra banco, rede, DNS e uploads fora do ambiente autorizado.
+Parâmetros: {"operation": "sqlite_uri"}
+Verificações previstas: A operação parametrizada deve ser bloqueada com AssertionError antes do acesso externo.
+Duração do caso (JUnit): 0.026 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+CASO 068 — APROVADO
+ID Pytest: src/app/tests/test_http.py::test_bloqueios_impedem_acesso_externo[socket]
+Fonte: src/app/tests/test_http.py:66
+Objetivo: Verificar as proteções contra banco, rede, DNS e uploads fora do ambiente autorizado.
+Parâmetros: {"operation": "socket"}
+Verificações previstas: A operação parametrizada deve ser bloqueada com AssertionError antes do acesso externo.
+Duração do caso (JUnit): 0.025 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+CASO 069 — APROVADO
+ID Pytest: src/app/tests/test_http.py::test_bloqueios_impedem_acesso_externo[dns]
+Fonte: src/app/tests/test_http.py:66
+Objetivo: Verificar as proteções contra banco, rede, DNS e uploads fora do ambiente autorizado.
+Parâmetros: {"operation": "dns"}
+Verificações previstas: A operação parametrizada deve ser bloqueada com AssertionError antes do acesso externo.
+Duração do caso (JUnit): 0.026 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+CASO 070 — APROVADO
+ID Pytest: src/app/tests/test_http.py::test_bloqueios_impedem_acesso_externo[upload]
+Fonte: src/app/tests/test_http.py:66
+Objetivo: Verificar as proteções contra banco, rede, DNS e uploads fora do ambiente autorizado.
+Parâmetros: {"operation": "upload"}
+Verificações previstas: A operação parametrizada deve ser bloqueada com AssertionError antes do acesso externo.
+Duração do caso (JUnit): 0.026 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+ARQUIVO: src/app/tests/test_inventory.py
+----------------------------------------------------------------------------
+
+CASO 071 — APROVADO
+ID Pytest: src/app/tests/test_inventory.py::test_cadastro_objeto_e_imagem_no_diretorio_temporario
+Fonte: src/app/tests/test_inventory.py:17
+Objetivo: Cadastrar objeto com tag/local válidos e imagem fictícia.
+Parâmetros: sem parametrização.
+Verificações previstas: Exige HTTP 201, associação correta, caminho sanitizado, bytes gravados na área temporária e imagem servida com HTTP 200.
+Duração do caso (JUnit): 0.101 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+CASO 072 — APROVADO
+ID Pytest: src/app/tests/test_inventory.py::test_cadastro_objeto_rejeita_campos_obrigatorios_ausentes[nome]
+Fonte: src/app/tests/test_inventory.py:30
+Objetivo: Verificar ausência de um dos campos obrigatórios já validados no cadastro de objeto.
+Parâmetros: {"field": "nome"}
+Verificações previstas: Remove o campo parametrizado, exige HTTP 400 e manutenção do único objeto da fixture.
+Duração do caso (JUnit): 0.075 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+CASO 073 — APROVADO
+ID Pytest: src/app/tests/test_inventory.py::test_cadastro_objeto_rejeita_campos_obrigatorios_ausentes[descricao]
+Fonte: src/app/tests/test_inventory.py:30
+Objetivo: Verificar ausência de um dos campos obrigatórios já validados no cadastro de objeto.
+Parâmetros: {"field": "descricao"}
+Verificações previstas: Remove o campo parametrizado, exige HTTP 400 e manutenção do único objeto da fixture.
+Duração do caso (JUnit): 0.053 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+CASO 074 — APROVADO
+ID Pytest: src/app/tests/test_inventory.py::test_cadastro_objeto_rejeita_campos_obrigatorios_ausentes[local]
+Fonte: src/app/tests/test_inventory.py:30
+Objetivo: Verificar ausência de um dos campos obrigatórios já validados no cadastro de objeto.
+Parâmetros: {"field": "local"}
+Verificações previstas: Remove o campo parametrizado, exige HTTP 400 e manutenção do único objeto da fixture.
+Duração do caso (JUnit): 0.039 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+CASO 075 — APROVADO
+ID Pytest: src/app/tests/test_inventory.py::test_cadastro_objeto_rejeita_campos_obrigatorios_ausentes[uid_recebido]
+Fonte: src/app/tests/test_inventory.py:30
+Objetivo: Verificar ausência de um dos campos obrigatórios já validados no cadastro de objeto.
+Parâmetros: {"field": "uid_recebido"}
+Verificações previstas: Remove o campo parametrizado, exige HTTP 400 e manutenção do único objeto da fixture.
+Duração do caso (JUnit): 0.037 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+CASO 076 — APROVADO
+ID Pytest: src/app/tests/test_inventory.py::test_cadastro_objeto_rejeita_campos_obrigatorios_ausentes[imagem]
+Fonte: src/app/tests/test_inventory.py:30
+Objetivo: Verificar ausência de um dos campos obrigatórios já validados no cadastro de objeto.
+Parâmetros: {"field": "imagem"}
+Verificações previstas: Remove o campo parametrizado, exige HTTP 400 e manutenção do único objeto da fixture.
+Duração do caso (JUnit): 0.027 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+CASO 077 — APROVADO
+ID Pytest: src/app/tests/test_inventory.py::test_cadastro_objeto_rejeita_referencias_inexistentes[changes0]
+Fonte: src/app/tests/test_inventory.py:39
+Objetivo: Cadastrar objeto com tag ou local inexistente.
+Parâmetros: {"changes": {"uid_recebido": "inexistente"}}
+Verificações previstas: Exige HTTP 404 e nenhuma inclusão de objeto.
+Duração do caso (JUnit): 0.039 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+CASO 078 — APROVADO
+ID Pytest: src/app/tests/test_inventory.py::test_cadastro_objeto_rejeita_referencias_inexistentes[changes1]
+Fonte: src/app/tests/test_inventory.py:39
+Objetivo: Cadastrar objeto com tag ou local inexistente.
+Parâmetros: {"changes": {"local": "999"}}
+Verificações previstas: Exige HTTP 404 e nenhuma inclusão de objeto.
+Duração do caso (JUnit): 0.039 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+CASO 079 — APROVADO
+ID Pytest: src/app/tests/test_inventory.py::test_nome_do_upload_e_sanitizado
+Fonte: src/app/tests/test_inventory.py:45
+Objetivo: Verificar o tratamento original de nome de arquivo com segmentos de diretório.
+Parâmetros: sem parametrização.
+Verificações previstas: Exige HTTP 201, arquivo salvo em static/uploads/fora.png temporário e ausência de gravação fora desse subdiretório.
+Duração do caso (JUnit): 0.040 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+CASO 080 — APROVADO
+ID Pytest: src/app/tests/test_inventory.py::test_recadastro_objeto_rejeita_entradas_e_conflitos[payload0-400]
+Fonte: src/app/tests/test_inventory.py:55
+Objetivo: Verificar recadastro com corpo vazio, objeto/tag inexistente ou UID já utilizada.
+Parâmetros: {"payload": {}, "status": 400}
+Verificações previstas: Exige o status parametrizado e preservação da UID original do objeto.
+Duração do caso (JUnit): 0.026 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+CASO 081 — APROVADO
+ID Pytest: src/app/tests/test_inventory.py::test_recadastro_objeto_rejeita_entradas_e_conflitos[payload1-404]
+Fonte: src/app/tests/test_inventory.py:55
+Objetivo: Verificar recadastro com corpo vazio, objeto/tag inexistente ou UID já utilizada.
+Parâmetros: {"payload": {"id_objeto": 999, "nova_uid": "b2c3d4e5"}, "status": 404}
+Verificações previstas: Exige o status parametrizado e preservação da UID original do objeto.
+Duração do caso (JUnit): 0.028 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+CASO 082 — APROVADO
+ID Pytest: src/app/tests/test_inventory.py::test_recadastro_objeto_rejeita_entradas_e_conflitos[payload2-404]
+Fonte: src/app/tests/test_inventory.py:55
+Objetivo: Verificar recadastro com corpo vazio, objeto/tag inexistente ou UID já utilizada.
+Parâmetros: {"payload": {"id_objeto": 1, "nova_uid": "inexistente"}, "status": 404}
+Verificações previstas: Exige o status parametrizado e preservação da UID original do objeto.
+Duração do caso (JUnit): 0.027 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+CASO 083 — APROVADO
+ID Pytest: src/app/tests/test_inventory.py::test_recadastro_objeto_rejeita_entradas_e_conflitos[payload3-400]
+Fonte: src/app/tests/test_inventory.py:55
+Objetivo: Verificar recadastro com corpo vazio, objeto/tag inexistente ou UID já utilizada.
+Parâmetros: {"payload": {"id_objeto": 1, "nova_uid": "a1b2c3d4"}, "status": 400}
+Verificações previstas: Exige o status parametrizado e preservação da UID original do objeto.
+Duração do caso (JUnit): 0.028 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+CASO 084 — APROVADO
+ID Pytest: src/app/tests/test_inventory.py::test_recadastro_objeto_atualiza_uid
+Fonte: src/app/tests/test_inventory.py:61
+Objetivo: Reassociar objeto existente a uma tag livre.
+Parâmetros: sem parametrização.
+Verificações previstas: Exige HTTP 200 e persistência da nova UID no objeto.
+Duração do caso (JUnit): 0.032 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+CASO 085 — APROVADO
+ID Pytest: src/app/tests/test_inventory.py::test_exclusao_objeto[payload0-400-1]
+Fonte: src/app/tests/test_inventory.py:70
+Objetivo: Verificar exclusão de objeto existente, ID inexistente e corpo vazio.
+Parâmetros: {"payload": {}, "remaining": 1, "status": 400}
+Verificações previstas: Confere status HTTP e quantidade restante de objetos para o cenário.
+Duração do caso (JUnit): 0.027 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+CASO 086 — APROVADO
+ID Pytest: src/app/tests/test_inventory.py::test_exclusao_objeto[payload1-404-1]
+Fonte: src/app/tests/test_inventory.py:70
+Objetivo: Verificar exclusão de objeto existente, ID inexistente e corpo vazio.
+Parâmetros: {"payload": {"objeto_excluir": 999}, "remaining": 1, "status": 404}
+Verificações previstas: Confere status HTTP e quantidade restante de objetos para o cenário.
+Duração do caso (JUnit): 0.027 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+CASO 087 — APROVADO
+ID Pytest: src/app/tests/test_inventory.py::test_exclusao_objeto[payload2-200-0]
+Fonte: src/app/tests/test_inventory.py:70
+Objetivo: Verificar exclusão de objeto existente, ID inexistente e corpo vazio.
+Parâmetros: {"payload": {"objeto_excluir": 1}, "remaining": 0, "status": 200}
+Verificações previstas: Confere status HTTP e quantidade restante de objetos para o cenário.
+Duração do caso (JUnit): 0.029 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+CASO 088 — APROVADO
+ID Pytest: src/app/tests/test_inventory.py::test_inventario_disponivel_aos_perfis_existentes[root]
+Fonte: src/app/tests/test_inventory.py:77
+Objetivo: Consultar inventário como Root ou usuário comum.
+Parâmetros: {"role": "root"}
+Verificações previstas: Exige HTTP 200, um objeto e a UID cadastrada, preservando a permissão existente de ambos os perfis.
+Duração do caso (JUnit): 0.026 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+CASO 089 — APROVADO
+ID Pytest: src/app/tests/test_inventory.py::test_inventario_disponivel_aos_perfis_existentes[user]
+Fonte: src/app/tests/test_inventory.py:77
+Objetivo: Consultar inventário como Root ou usuário comum.
+Parâmetros: {"role": "user"}
+Verificações previstas: Exige HTTP 200, um objeto e a UID cadastrada, preservando a permissão existente de ambos os perfis.
+Duração do caso (JUnit): 0.026 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+CASO 090 — APROVADO
+ID Pytest: src/app/tests/test_inventory.py::test_inventario_exige_jwt
+Fonte: src/app/tests/test_inventory.py:84
+Objetivo: Consultar a rota de inventário protegida sem JWT.
+Parâmetros: sem parametrização.
+Verificações previstas: Exige HTTP 401.
+Duração do caso (JUnit): 0.015 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+CASO 091 — APROVADO
+ID Pytest: src/app/tests/test_inventory.py::test_consultas_publicas_preservam_historico[/buscar_objeto_id/1-200-buscar_objeto_id-sucesso]
+Fonte: src/app/tests/test_inventory.py:94
+Objetivo: Consultar objeto por ID ou UID nas rotas públicas existentes.
+Parâmetros: {"action": "buscar_objeto_id", "path": "/buscar_objeto_id/1", "result": "sucesso", "status": 200}
+Verificações previstas: Confere status 200/404, nome quando encontrado e registro único de histórico com ação, resultado e referência compatíveis.
+Duração do caso (JUnit): 0.029 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+CASO 092 — APROVADO
+ID Pytest: src/app/tests/test_inventory.py::test_consultas_publicas_preservam_historico[/buscar_objeto_id/999-404-buscar_objeto_id-falha]
+Fonte: src/app/tests/test_inventory.py:94
+Objetivo: Consultar objeto por ID ou UID nas rotas públicas existentes.
+Parâmetros: {"action": "buscar_objeto_id", "path": "/buscar_objeto_id/999", "result": "falha", "status": 404}
+Verificações previstas: Confere status 200/404, nome quando encontrado e registro único de histórico com ação, resultado e referência compatíveis.
+Duração do caso (JUnit): 0.025 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+CASO 093 — APROVADO
+ID Pytest: src/app/tests/test_inventory.py::test_consultas_publicas_preservam_historico[/buscar_objeto_uid/a1b2c3d4-200-buscar_objeto_uid-sucesso]
+Fonte: src/app/tests/test_inventory.py:94
+Objetivo: Consultar objeto por ID ou UID nas rotas públicas existentes.
+Parâmetros: {"action": "buscar_objeto_uid", "path": "/buscar_objeto_uid/a1b2c3d4", "result": "sucesso", "status": 200}
+Verificações previstas: Confere status 200/404, nome quando encontrado e registro único de histórico com ação, resultado e referência compatíveis.
+Duração do caso (JUnit): 0.026 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+CASO 094 — APROVADO
+ID Pytest: src/app/tests/test_inventory.py::test_consultas_publicas_preservam_historico[/buscar_objeto_uid/inexistente-404-buscar_objeto_uid-falha]
+Fonte: src/app/tests/test_inventory.py:94
+Objetivo: Consultar objeto por ID ou UID nas rotas públicas existentes.
+Parâmetros: {"action": "buscar_objeto_uid", "path": "/buscar_objeto_uid/inexistente", "result": "falha", "status": 404}
+Verificações previstas: Confere status 200/404, nome quando encontrado e registro único de histórico com ação, resultado e referência compatíveis.
+Duração do caso (JUnit): 0.026 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+CASO 095 — APROVADO
+ID Pytest: src/app/tests/test_inventory.py::test_busca_objeto_por_nome[Notebook-200]
+Fonte: src/app/tests/test_inventory.py:106
+Objetivo: Consultar objeto por nome completo, trecho ou termo sem correspondência.
+Parâmetros: {"status": 200, "term": "Notebook"}
+Verificações previstas: Confere status e quantidade retornada; essa consulta continua sem produzir histórico patrimonial.
+Duração do caso (JUnit): 0.029 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+CASO 096 — APROVADO
+ID Pytest: src/app/tests/test_inventory.py::test_busca_objeto_por_nome[book-200]
+Fonte: src/app/tests/test_inventory.py:106
+Objetivo: Consultar objeto por nome completo, trecho ou termo sem correspondência.
+Parâmetros: {"status": 200, "term": "book"}
+Verificações previstas: Confere status e quantidade retornada; essa consulta continua sem produzir histórico patrimonial.
+Duração do caso (JUnit): 0.023 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+CASO 097 — APROVADO
+ID Pytest: src/app/tests/test_inventory.py::test_busca_objeto_por_nome[INEXISTENTE-404]
+Fonte: src/app/tests/test_inventory.py:106
+Objetivo: Consultar objeto por nome completo, trecho ou termo sem correspondência.
+Parâmetros: {"status": 404, "term": "INEXISTENTE"}
+Verificações previstas: Confere status e quantidade retornada; essa consulta continua sem produzir histórico patrimonial.
+Duração do caso (JUnit): 0.023 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+CASO 098 — APROVADO
+ID Pytest: src/app/tests/test_inventory.py::test_cadastro_e_edicao_de_local
+Fonte: src/app/tests/test_inventory.py:114
+Objetivo: Cadastrar local e editar o endereço de outro local como Root.
+Parâmetros: sem parametrização.
+Verificações previstas: Exige o retorno original 200, inclusão do segundo local e persistência da edição.
+Duração do caso (JUnit): 0.079 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+CASO 099 — APROVADO
+ID Pytest: src/app/tests/test_inventory.py::test_locais_rejeitam_corpo_vazio_ou_id_inexistente[post-/cadastrar_local-payload0-400]
+Fonte: src/app/tests/test_inventory.py:128
+Objetivo: Verificar cadastro/edição de local com corpo vazio ou ID inexistente.
+Parâmetros: {"method": "post", "path": "/cadastrar_local", "payload": {}, "status": 400}
+Verificações previstas: Exige status 400/404 conforme método, rota e payload parametrizados.
+Duração do caso (JUnit): 0.027 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+CASO 100 — APROVADO
+ID Pytest: src/app/tests/test_inventory.py::test_locais_rejeitam_corpo_vazio_ou_id_inexistente[put-/editar_local-payload1-400]
+Fonte: src/app/tests/test_inventory.py:128
+Objetivo: Verificar cadastro/edição de local com corpo vazio ou ID inexistente.
+Parâmetros: {"method": "put", "path": "/editar_local", "payload": {}, "status": 400}
+Verificações previstas: Exige status 400/404 conforme método, rota e payload parametrizados.
+Duração do caso (JUnit): 0.026 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+CASO 101 — APROVADO
+ID Pytest: src/app/tests/test_inventory.py::test_locais_rejeitam_corpo_vazio_ou_id_inexistente[put-/editar_local-payload2-404]
+Fonte: src/app/tests/test_inventory.py:128
+Objetivo: Verificar cadastro/edição de local com corpo vazio ou ID inexistente.
+Parâmetros: {"method": "put", "path": "/editar_local", "payload": {"local_alterado": 999}, "status": 404}
+Verificações previstas: Exige status 400/404 conforme método, rota e payload parametrizados.
+Duração do caso (JUnit): 0.027 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+CASO 102 — REPROVADO
+ID Pytest: src/app/tests/test_inventory.py::test_local_incompleto_deve_ser_rejeitado_com_400[endereco]
+Fonte: src/app/tests/test_inventory.py:134
+Objetivo: Verificar cadastro de local sem endereço, descrição ou responsável.
+Parâmetros: {"missing": "endereco"}
+Verificações previstas: Exige HTTP 400 para o campo obrigatório ausente.
+Duração do caso (JUnit): 0.022 s.
+Marcador defeito_api: sim.
+Resultado observado: assert 200 == 400
+A asserção permaneceu ativa; nenhuma correção da aplicação foi aplicada.
+
+CASO 103 — REPROVADO
+ID Pytest: src/app/tests/test_inventory.py::test_local_incompleto_deve_ser_rejeitado_com_400[descricao]
+Fonte: src/app/tests/test_inventory.py:134
+Objetivo: Verificar cadastro de local sem endereço, descrição ou responsável.
+Parâmetros: {"missing": "descricao"}
+Verificações previstas: Exige HTTP 400 para o campo obrigatório ausente.
+Duração do caso (JUnit): 0.023 s.
+Marcador defeito_api: sim.
+Resultado observado: assert 500 == 400
+A asserção permaneceu ativa; nenhuma correção da aplicação foi aplicada.
+
+CASO 104 — REPROVADO
+ID Pytest: src/app/tests/test_inventory.py::test_local_incompleto_deve_ser_rejeitado_com_400[responsavel]
+Fonte: src/app/tests/test_inventory.py:134
+Objetivo: Verificar cadastro de local sem endereço, descrição ou responsável.
+Parâmetros: {"missing": "responsavel"}
+Verificações previstas: Exige HTTP 400 para o campo obrigatório ausente.
+Duração do caso (JUnit): 0.023 s.
+Marcador defeito_api: sim.
+Resultado observado: assert 500 == 400
+A asserção permaneceu ativa; nenhuma correção da aplicação foi aplicada.
+
+CASO 105 — APROVADO
+ID Pytest: src/app/tests/test_inventory.py::test_listagem_publica_de_locais
+Fonte: src/app/tests/test_inventory.py:141
+Objetivo: Consultar locais sem acrescentar autenticação à rota original.
+Parâmetros: sem parametrização.
+Verificações previstas: Exige HTTP 200, um local e endereço correspondente à fixture.
+Duração do caso (JUnit): 0.022 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+CASO 106 — APROVADO
+ID Pytest: src/app/tests/test_inventory.py::test_cadastro_esp32_preserva_mac_e_local_sem_token
+Fonte: src/app/tests/test_inventory.py:148
+Objetivo: Cadastrar ESP32 usando somente os campos originais MAC/local.
+Parâmetros: sem parametrização.
+Verificações previstas: Exige HTTP 200, somente message na resposta e vínculo MAC/local persistido, sem token de dispositivo.
+Duração do caso (JUnit): 0.025 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+CASO 107 — APROVADO
+ID Pytest: src/app/tests/test_inventory.py::test_cadastro_esp32_rejeita_campos_ausentes[payload0]
+Fonte: src/app/tests/test_inventory.py:158
+Objetivo: Verificar cadastro de dispositivo sem MAC ou local.
+Parâmetros: {"payload": {}}
+Verificações previstas: Exige HTTP 400 e nenhum dispositivo persistido.
+Duração do caso (JUnit): 0.018 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+CASO 108 — APROVADO
+ID Pytest: src/app/tests/test_inventory.py::test_cadastro_esp32_rejeita_campos_ausentes[payload1]
+Fonte: src/app/tests/test_inventory.py:158
+Objetivo: Verificar cadastro de dispositivo sem MAC ou local.
+Parâmetros: {"payload": {"mac_adress": "AA:BB:CC:DD:EE:02"}}
+Verificações previstas: Exige HTTP 400 e nenhum dispositivo persistido.
+Duração do caso (JUnit): 0.016 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+CASO 109 — APROVADO
+ID Pytest: src/app/tests/test_inventory.py::test_cadastro_esp32_rejeita_campos_ausentes[payload2]
+Fonte: src/app/tests/test_inventory.py:158
+Objetivo: Verificar cadastro de dispositivo sem MAC ou local.
+Parâmetros: {"payload": {"local": 1}}
+Verificações previstas: Exige HTTP 400 e nenhum dispositivo persistido.
+Duração do caso (JUnit): 0.016 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+CASO 110 — APROVADO
+ID Pytest: src/app/tests/test_inventory.py::test_esp32_duplicado_nao_persiste_novamente
+Fonte: src/app/tests/test_inventory.py:164
+Objetivo: Tentar cadastrar novamente um MAC já existente.
+Parâmetros: sem parametrização.
+Verificações previstas: Confere o retorno original 500 para violação de integridade e manutenção de um dispositivo. Não afirma que 500 seja a melhor política HTTP.
+Duração do caso (JUnit): 0.026 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+CASO 111 — APROVADO
+ID Pytest: src/app/tests/test_inventory.py::test_leitura_http_autorizada_apenas_por_mac_cadastrado[d4e5f6a7-livre]
+Fonte: src/app/tests/test_inventory.py:171
+Objetivo: Ler tag livre, vinculada a objeto ou vinculada a usuário por HTTP com MAC cadastrado.
+Parâmetros: {"expected_status": "livre", "uid": "d4e5f6a7"}
+Verificações previstas: Sem cabeçalhos novos, exige HTTP 200, UID única, evento rfid_update com estado correto e opções originais de namespace/broadcast.
+Duração do caso (JUnit): 0.031 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+CASO 112 — APROVADO
+ID Pytest: src/app/tests/test_inventory.py::test_leitura_http_autorizada_apenas_por_mac_cadastrado[a1b2c3d4-objeto]
+Fonte: src/app/tests/test_inventory.py:171
+Objetivo: Ler tag livre, vinculada a objeto ou vinculada a usuário por HTTP com MAC cadastrado.
+Parâmetros: {"expected_status": "objeto", "uid": "a1b2c3d4"}
+Verificações previstas: Sem cabeçalhos novos, exige HTTP 200, UID única, evento rfid_update com estado correto e opções originais de namespace/broadcast.
+Duração do caso (JUnit): 0.027 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+CASO 113 — APROVADO
+ID Pytest: src/app/tests/test_inventory.py::test_leitura_http_autorizada_apenas_por_mac_cadastrado[c3d4e5f6-usuario]
+Fonte: src/app/tests/test_inventory.py:171
+Objetivo: Ler tag livre, vinculada a objeto ou vinculada a usuário por HTTP com MAC cadastrado.
+Parâmetros: {"expected_status": "usuario", "uid": "c3d4e5f6"}
+Verificações previstas: Sem cabeçalhos novos, exige HTTP 200, UID única, evento rfid_update com estado correto e opções originais de namespace/broadcast.
+Duração do caso (JUnit): 0.027 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+CASO 114 — APROVADO
+ID Pytest: src/app/tests/test_inventory.py::test_mac_nao_cadastrado_nao_autoriza_leitura[AA:BB:CC:DD:EE:99]
+Fonte: src/app/tests/test_inventory.py:186
+Objetivo: Solicitar leitura com MAC desconhecido, vazio ou nulo.
+Parâmetros: {"mac": "AA:BB:CC:DD:EE:99"}
+Verificações previstas: Exige HTTP 403 e nenhuma inclusão entre as três tags existentes.
+Duração do caso (JUnit): 0.026 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+CASO 115 — APROVADO
+ID Pytest: src/app/tests/test_inventory.py::test_mac_nao_cadastrado_nao_autoriza_leitura[]
+Fonte: src/app/tests/test_inventory.py:186
+Objetivo: Solicitar leitura com MAC desconhecido, vazio ou nulo.
+Parâmetros: {"mac": ""}
+Verificações previstas: Exige HTTP 403 e nenhuma inclusão entre as três tags existentes.
+Duração do caso (JUnit): 0.024 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+CASO 116 — APROVADO
+ID Pytest: src/app/tests/test_inventory.py::test_mac_nao_cadastrado_nao_autoriza_leitura[None]
+Fonte: src/app/tests/test_inventory.py:186
+Objetivo: Solicitar leitura com MAC desconhecido, vazio ou nulo.
+Parâmetros: {"mac": null}
+Verificações previstas: Exige HTTP 403 e nenhuma inclusão entre as três tags existentes.
+Duração do caso (JUnit): 0.024 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+CASO 117 — APROVADO
+ID Pytest: src/app/tests/test_inventory.py::test_leitura_idempotente_nao_duplica_tag
+Fonte: src/app/tests/test_inventory.py:192
+Objetivo: Enviar duas vezes a mesma leitura com MAC cadastrado.
+Parâmetros: sem parametrização.
+Verificações previstas: Exige HTTP 200 nas duas requisições e somente uma nova tag persistida.
+Duração do caso (JUnit): 0.030 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+CASO 118 — APROVADO
+ID Pytest: src/app/tests/test_inventory.py::test_evento_socketio_real_em_processo_apos_leitura
+Fonte: src/app/tests/test_inventory.py:199
+Objetivo: Verificar emissão e recepção Socket.IO usando cliente em processo.
+Parâmetros: sem parametrização.
+Verificações previstas: Exige conexão aceita, leitura HTTP 200 e evento rfid_update contendo a UID. Não usa rede ou navegador real.
+Duração do caso (JUnit): 0.026 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+CASO 119 — APROVADO
+ID Pytest: src/app/tests/test_inventory.py::test_rfid_corpo_vazio_retorna_400
+Fonte: src/app/tests/test_inventory.py:213
+Objetivo: Enviar objeto JSON vazio ao cadastro RFID.
+Parâmetros: sem parametrização.
+Verificações previstas: Exige HTTP 400.
+Duração do caso (JUnit): 0.015 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+CASO 120 — APROVADO
+ID Pytest: src/app/tests/test_inventory.py::test_listagem_rfid_publica_preserva_campos
+Fonte: src/app/tests/test_inventory.py:217
+Objetivo: Consultar tags na rota pública original.
+Parâmetros: sem parametrização.
+Verificações previstas: Exige HTTP 200, chave legada total_objetos=3 e os tipos livre, objeto e usuario.
+Duração do caso (JUnit): 0.027 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+CASO 121 — APROVADO
+ID Pytest: src/app/tests/test_inventory.py::test_consulta_rfid_por_uid[a1b2c3d4-200]
+Fonte: src/app/tests/test_inventory.py:225
+Objetivo: Consultar tag existente ou inexistente por UID.
+Parâmetros: {"status": 200, "uid": "a1b2c3d4"}
+Verificações previstas: Confere os status originais 200/400 e a UID retornada no sucesso.
+Duração do caso (JUnit): 0.022 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+CASO 122 — APROVADO
+ID Pytest: src/app/tests/test_inventory.py::test_consulta_rfid_por_uid[inexistente-400]
+Fonte: src/app/tests/test_inventory.py:225
+Objetivo: Consultar tag existente ou inexistente por UID.
+Parâmetros: {"status": 400, "uid": "inexistente"}
+Verificações previstas: Confere os status originais 200/400 e a UID retornada no sucesso.
+Duração do caso (JUnit): 0.022 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+CASO 123 — APROVADO
+ID Pytest: src/app/tests/test_inventory.py::test_exclusao_de_tag_livre_e_bloqueio_de_objeto[payload0-400-3]
+Fonte: src/app/tests/test_inventory.py:234
+Objetivo: Verificar exclusão de tag livre, tag inexistente, tag vinculada a objeto e corpo vazio.
+Parâmetros: {"payload": {}, "remaining": 3, "status": 400}
+Verificações previstas: Confere o status de cada cenário e a quantidade restante de tags.
+Duração do caso (JUnit): 0.028 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+CASO 124 — APROVADO
+ID Pytest: src/app/tests/test_inventory.py::test_exclusao_de_tag_livre_e_bloqueio_de_objeto[payload1-404-3]
+Fonte: src/app/tests/test_inventory.py:234
+Objetivo: Verificar exclusão de tag livre, tag inexistente, tag vinculada a objeto e corpo vazio.
+Parâmetros: {"payload": {"uid_recebido": "inexistente"}, "remaining": 3, "status": 404}
+Verificações previstas: Confere o status de cada cenário e a quantidade restante de tags.
+Duração do caso (JUnit): 0.027 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+CASO 125 — APROVADO
+ID Pytest: src/app/tests/test_inventory.py::test_exclusao_de_tag_livre_e_bloqueio_de_objeto[payload2-400-3]
+Fonte: src/app/tests/test_inventory.py:234
+Objetivo: Verificar exclusão de tag livre, tag inexistente, tag vinculada a objeto e corpo vazio.
+Parâmetros: {"payload": {"uid_recebido": "a1b2c3d4"}, "remaining": 3, "status": 400}
+Verificações previstas: Confere o status de cada cenário e a quantidade restante de tags.
+Duração do caso (JUnit): 0.028 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+CASO 126 — APROVADO
+ID Pytest: src/app/tests/test_inventory.py::test_exclusao_de_tag_livre_e_bloqueio_de_objeto[payload3-200-2]
+Fonte: src/app/tests/test_inventory.py:234
+Objetivo: Verificar exclusão de tag livre, tag inexistente, tag vinculada a objeto e corpo vazio.
+Parâmetros: {"payload": {"uid_recebido": "b2c3d4e5"}, "remaining": 2, "status": 200}
+Verificações previstas: Confere o status de cada cenário e a quantidade restante de tags.
+Duração do caso (JUnit): 0.029 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+CASO 127 — APROVADO
+ID Pytest: src/app/tests/test_inventory.py::test_falha_de_commit_nao_persiste_operacao[post-/cadastrar_local-payload0]
+Fonte: src/app/tests/test_inventory.py:249
+Objetivo: Simular falha de commit nas operações com tratamento explícito de rollback.
+Parâmetros: {"method": "post", "path": "/cadastrar_local", "payload": {"descricao": "Descrição", "endereco": "Sala", "responsavel": "Pessoa"}}
+Verificações previstas: Exige HTTP 500, chamada de rollback e preservação de objeto, tags, dispositivo e endereço do local.
+Duração do caso (JUnit): 0.029 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+CASO 128 — APROVADO
+ID Pytest: src/app/tests/test_inventory.py::test_falha_de_commit_nao_persiste_operacao[put-/editar_local-payload1]
+Fonte: src/app/tests/test_inventory.py:249
+Objetivo: Simular falha de commit nas operações com tratamento explícito de rollback.
+Parâmetros: {"method": "put", "path": "/editar_local", "payload": {"local_alterado": 1, "nova_descricao": "Nova", "novo_endereco": "Sala", "novo_responsavel": "Pessoa"}}
+Verificações previstas: Exige HTTP 500, chamada de rollback e preservação de objeto, tags, dispositivo e endereço do local.
+Duração do caso (JUnit): 0.030 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+CASO 129 — APROVADO
+ID Pytest: src/app/tests/test_inventory.py::test_falha_de_commit_nao_persiste_operacao[post-/cadastrar_esp32-payload2]
+Fonte: src/app/tests/test_inventory.py:249
+Objetivo: Simular falha de commit nas operações com tratamento explícito de rollback.
+Parâmetros: {"method": "post", "path": "/cadastrar_esp32", "payload": {"local": 1, "mac_adress": "AA:BB:CC:DD:EE:02"}}
+Verificações previstas: Exige HTTP 500, chamada de rollback e preservação de objeto, tags, dispositivo e endereço do local.
+Duração do caso (JUnit): 0.027 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+CASO 130 — APROVADO
+ID Pytest: src/app/tests/test_inventory.py::test_falha_de_commit_nao_persiste_operacao[post-/atribuir_rfid_usuario-payload3]
+Fonte: src/app/tests/test_inventory.py:249
+Objetivo: Simular falha de commit nas operações com tratamento explícito de rollback.
+Parâmetros: {"method": "post", "path": "/atribuir_rfid_usuario", "payload": {"id_usuario": 1, "uid_usuario": "b2c3d4e5"}}
+Verificações previstas: Exige HTTP 500, chamada de rollback e preservação de objeto, tags, dispositivo e endereço do local.
+Duração do caso (JUnit): 0.033 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+CASO 131 — APROVADO
+ID Pytest: src/app/tests/test_inventory.py::test_falha_de_commit_nao_persiste_operacao[put-/recadastrar_objeto-payload4]
+Fonte: src/app/tests/test_inventory.py:249
+Objetivo: Simular falha de commit nas operações com tratamento explícito de rollback.
+Parâmetros: {"method": "put", "path": "/recadastrar_objeto", "payload": {"id_objeto": 1, "nova_uid": "b2c3d4e5"}}
+Verificações previstas: Exige HTTP 500, chamada de rollback e preservação de objeto, tags, dispositivo e endereço do local.
+Duração do caso (JUnit): 0.031 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+CASO 132 — APROVADO
+ID Pytest: src/app/tests/test_inventory.py::test_falha_de_commit_nao_persiste_operacao[delete-/excluir_objeto-payload5]
+Fonte: src/app/tests/test_inventory.py:249
+Objetivo: Simular falha de commit nas operações com tratamento explícito de rollback.
+Parâmetros: {"method": "delete", "path": "/excluir_objeto", "payload": {"objeto_excluir": 1}}
+Verificações previstas: Exige HTTP 500, chamada de rollback e preservação de objeto, tags, dispositivo e endereço do local.
+Duração do caso (JUnit): 0.030 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+CASO 133 — APROVADO
+ID Pytest: src/app/tests/test_inventory.py::test_falha_de_commit_nao_persiste_operacao[delete-/excluir_rfid-payload6]
+Fonte: src/app/tests/test_inventory.py:249
+Objetivo: Simular falha de commit nas operações com tratamento explícito de rollback.
+Parâmetros: {"method": "delete", "path": "/excluir_rfid", "payload": {"uid_recebido": "b2c3d4e5"}}
+Verificações previstas: Exige HTTP 500, chamada de rollback e preservação de objeto, tags, dispositivo e endereço do local.
+Duração do caso (JUnit): 0.031 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+ARQUIVO: src/app/tests/test_models.py
+----------------------------------------------------------------------------
+
+CASO 134 — APROVADO
+ID Pytest: src/app/tests/test_models.py::test_restricoes_declaradas_no_schema[email_unico]
+Fonte: src/app/tests/test_models.py:57
+Objetivo: Verificar uma restrição de unicidade, obrigatoriedade ou FK declarada pelos modelos.
+Parâmetros: {"table": "users", "values": {"email": "model@example.test", "id": 2, "nome": "Outro", "senha": "[dado fictício omitido; cenário identificado pelo nome do caso]", "tipo_user": "users"}}
+Verificações previstas: Em engine temporário separado com FKs ativas, a inserção parametrizada deve lançar IntegrityError sem alterar a contagem da tabela.
+Duração do caso (JUnit): 0.047 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+CASO 135 — APROVADO
+ID Pytest: src/app/tests/test_models.py::test_restricoes_declaradas_no_schema[email_obrigatorio]
+Fonte: src/app/tests/test_models.py:57
+Objetivo: Verificar uma restrição de unicidade, obrigatoriedade ou FK declarada pelos modelos.
+Parâmetros: {"table": "users", "values": {"email": null, "id": 2, "nome": "Outro", "senha": "[dado fictício omitido; cenário identificado pelo nome do caso]", "tipo_user": "users"}}
+Verificações previstas: Em engine temporário separado com FKs ativas, a inserção parametrizada deve lançar IntegrityError sem alterar a contagem da tabela.
+Duração do caso (JUnit): 0.047 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+CASO 136 — APROVADO
+ID Pytest: src/app/tests/test_models.py::test_restricoes_declaradas_no_schema[senha_obrigatoria]
+Fonte: src/app/tests/test_models.py:57
+Objetivo: Verificar uma restrição de unicidade, obrigatoriedade ou FK declarada pelos modelos.
+Parâmetros: {"table": "users", "values": {"email": "other@example.test", "id": 2, "nome": "Outro", "senha": null, "tipo_user": "users"}}
+Verificações previstas: Em engine temporário separado com FKs ativas, a inserção parametrizada deve lançar IntegrityError sem alterar a contagem da tabela.
+Duração do caso (JUnit): 0.042 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+CASO 137 — APROVADO
+ID Pytest: src/app/tests/test_models.py::test_restricoes_declaradas_no_schema[credencial_unica]
+Fonte: src/app/tests/test_models.py:57
+Objetivo: Verificar uma restrição de unicidade, obrigatoriedade ou FK declarada pelos modelos.
+Parâmetros: {"table": "users", "values": {"credencial_rfid": "b2c3d4e5", "email": "other@example.test", "id": 2, "nome": "Outro", "senha": "[dado fictício omitido; cenário identificado pelo nome do caso]", "tipo_user": "users"}}
+Verificações previstas: Em engine temporário separado com FKs ativas, a inserção parametrizada deve lançar IntegrityError sem alterar a contagem da tabela.
+Duração do caso (JUnit): 0.043 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+CASO 138 — APROVADO
+ID Pytest: src/app/tests/test_models.py::test_restricoes_declaradas_no_schema[credencial_fk]
+Fonte: src/app/tests/test_models.py:57
+Objetivo: Verificar uma restrição de unicidade, obrigatoriedade ou FK declarada pelos modelos.
+Parâmetros: {"table": "users", "values": {"credencial_rfid": "inexistente", "email": "other@example.test", "id": 2, "nome": "Outro", "senha": "[dado fictício omitido; cenário identificado pelo nome do caso]", "tipo_user": "users"}}
+Verificações previstas: Em engine temporário separado com FKs ativas, a inserção parametrizada deve lançar IntegrityError sem alterar a contagem da tabela.
+Duração do caso (JUnit): 0.042 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+CASO 139 — APROVADO
+ID Pytest: src/app/tests/test_models.py::test_restricoes_declaradas_no_schema[uid_unica]
+Fonte: src/app/tests/test_models.py:57
+Objetivo: Verificar uma restrição de unicidade, obrigatoriedade ou FK declarada pelos modelos.
+Parâmetros: {"table": "rfid", "values": {"date": "2026-01-02", "uid": "a1b2c3d4"}}
+Verificações previstas: Em engine temporário separado com FKs ativas, a inserção parametrizada deve lançar IntegrityError sem alterar a contagem da tabela.
+Duração do caso (JUnit): 0.042 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+CASO 140 — APROVADO
+ID Pytest: src/app/tests/test_models.py::test_restricoes_declaradas_no_schema[data_obrigatoria]
+Fonte: src/app/tests/test_models.py:57
+Objetivo: Verificar uma restrição de unicidade, obrigatoriedade ou FK declarada pelos modelos.
+Parâmetros: {"table": "rfid", "values": {"date": null, "uid": "c3d4e5f6"}}
+Verificações previstas: Em engine temporário separado com FKs ativas, a inserção parametrizada deve lançar IntegrityError sem alterar a contagem da tabela.
+Duração do caso (JUnit): 0.042 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+CASO 141 — APROVADO
+ID Pytest: src/app/tests/test_models.py::test_restricoes_declaradas_no_schema[objeto_tag_unica]
+Fonte: src/app/tests/test_models.py:57
+Objetivo: Verificar uma restrição de unicidade, obrigatoriedade ou FK declarada pelos modelos.
+Parâmetros: {"table": "object", "values": {"descricao": "Teste", "especificacoes": "Teste", "id": 2, "id_lugar": 1, "id_rfid": "a1b2c3d4", "nome": "Outro"}}
+Verificações previstas: Em engine temporário separado com FKs ativas, a inserção parametrizada deve lançar IntegrityError sem alterar a contagem da tabela.
+Duração do caso (JUnit): 0.042 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+CASO 142 — APROVADO
+ID Pytest: src/app/tests/test_models.py::test_restricoes_declaradas_no_schema[objeto_tag_fk]
+Fonte: src/app/tests/test_models.py:57
+Objetivo: Verificar uma restrição de unicidade, obrigatoriedade ou FK declarada pelos modelos.
+Parâmetros: {"table": "object", "values": {"descricao": "Teste", "especificacoes": "Teste", "id": 2, "id_lugar": 1, "id_rfid": "inexistente", "nome": "Outro"}}
+Verificações previstas: Em engine temporário separado com FKs ativas, a inserção parametrizada deve lançar IntegrityError sem alterar a contagem da tabela.
+Duração do caso (JUnit): 0.042 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+CASO 143 — APROVADO
+ID Pytest: src/app/tests/test_models.py::test_restricoes_declaradas_no_schema[objeto_local_fk]
+Fonte: src/app/tests/test_models.py:57
+Objetivo: Verificar uma restrição de unicidade, obrigatoriedade ou FK declarada pelos modelos.
+Parâmetros: {"table": "object", "values": {"descricao": "Teste", "especificacoes": "Teste", "id": 2, "id_lugar": 999, "id_rfid": "b2c3d4e5", "nome": "Outro"}}
+Verificações previstas: Em engine temporário separado com FKs ativas, a inserção parametrizada deve lançar IntegrityError sem alterar a contagem da tabela.
+Duração do caso (JUnit): 0.042 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+CASO 144 — APROVADO
+ID Pytest: src/app/tests/test_models.py::test_restricoes_declaradas_no_schema[mac_unico]
+Fonte: src/app/tests/test_models.py:57
+Objetivo: Verificar uma restrição de unicidade, obrigatoriedade ou FK declarada pelos modelos.
+Parâmetros: {"table": "esp32_registro", "values": {"local": 1, "mac": "AA:BB:CC:DD:EE:01"}}
+Verificações previstas: Em engine temporário separado com FKs ativas, a inserção parametrizada deve lançar IntegrityError sem alterar a contagem da tabela.
+Duração do caso (JUnit): 0.041 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+CASO 145 — APROVADO
+ID Pytest: src/app/tests/test_models.py::test_restricoes_declaradas_no_schema[dispositivo_local_fk]
+Fonte: src/app/tests/test_models.py:57
+Objetivo: Verificar uma restrição de unicidade, obrigatoriedade ou FK declarada pelos modelos.
+Parâmetros: {"table": "esp32_registro", "values": {"local": 999, "mac": "AA:BB:CC:DD:EE:02"}}
+Verificações previstas: Em engine temporário separado com FKs ativas, a inserção parametrizada deve lançar IntegrityError sem alterar a contagem da tabela.
+Duração do caso (JUnit): 0.041 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+CASO 146 — APROVADO
+ID Pytest: src/app/tests/test_models.py::test_restricoes_declaradas_no_schema[root_usuario_fk]
+Fonte: src/app/tests/test_models.py:57
+Objetivo: Verificar uma restrição de unicidade, obrigatoriedade ou FK declarada pelos modelos.
+Parâmetros: {"table": "roots", "values": {"id": 999, "nivel_permissao": "total", "senha_root": "[dado fictício omitido; cenário identificado pelo nome do caso]"}}
+Verificações previstas: Em engine temporário separado com FKs ativas, a inserção parametrizada deve lançar IntegrityError sem alterar a contagem da tabela.
+Duração do caso (JUnit): 0.042 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+CASO 147 — APROVADO
+ID Pytest: src/app/tests/test_models.py::test_restricoes_declaradas_no_schema[root_senha_obrigatoria]
+Fonte: src/app/tests/test_models.py:57
+Objetivo: Verificar uma restrição de unicidade, obrigatoriedade ou FK declarada pelos modelos.
+Parâmetros: {"table": "roots", "values": {"id": 1, "nivel_permissao": "total", "senha_root": null}}
+Verificações previstas: Em engine temporário separado com FKs ativas, a inserção parametrizada deve lançar IntegrityError sem alterar a contagem da tabela.
+Duração do caso (JUnit): 0.042 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+CASO 148 — APROVADO
+ID Pytest: src/app/tests/test_models.py::test_restricoes_declaradas_no_schema[acesso_tag_fk]
+Fonte: src/app/tests/test_models.py:57
+Objetivo: Verificar uma restrição de unicidade, obrigatoriedade ou FK declarada pelos modelos.
+Parâmetros: {"table": "registro_acesso", "values": {"id_local": 1, "id_rfid": "inexistente", "status_tentativa": "Negado"}}
+Verificações previstas: Em engine temporário separado com FKs ativas, a inserção parametrizada deve lançar IntegrityError sem alterar a contagem da tabela.
+Duração do caso (JUnit): 0.044 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+CASO 149 — APROVADO
+ID Pytest: src/app/tests/test_models.py::test_restricoes_declaradas_no_schema[acesso_local_fk]
+Fonte: src/app/tests/test_models.py:57
+Objetivo: Verificar uma restrição de unicidade, obrigatoriedade ou FK declarada pelos modelos.
+Parâmetros: {"table": "registro_acesso", "values": {"id_local": 999, "id_rfid": null, "status_tentativa": "Negado"}}
+Verificações previstas: Em engine temporário separado com FKs ativas, a inserção parametrizada deve lançar IntegrityError sem alterar a contagem da tabela.
+Duração do caso (JUnit): 0.042 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+CASO 150 — APROVADO
+ID Pytest: src/app/tests/test_models.py::test_restricoes_declaradas_no_schema[historico_objeto_fk]
+Fonte: src/app/tests/test_models.py:57
+Objetivo: Verificar uma restrição de unicidade, obrigatoriedade ou FK declarada pelos modelos.
+Parâmetros: {"table": "historico_patrimonio", "values": {"acao": "consulta", "id_objeto": 999, "id_usuario": null}}
+Verificações previstas: Em engine temporário separado com FKs ativas, a inserção parametrizada deve lançar IntegrityError sem alterar a contagem da tabela.
+Duração do caso (JUnit): 0.042 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+CASO 151 — APROVADO
+ID Pytest: src/app/tests/test_models.py::test_restricoes_declaradas_no_schema[historico_usuario_fk]
+Fonte: src/app/tests/test_models.py:57
+Objetivo: Verificar uma restrição de unicidade, obrigatoriedade ou FK declarada pelos modelos.
+Parâmetros: {"table": "historico_patrimonio", "values": {"acao": "consulta", "id_objeto": null, "id_usuario": 999}}
+Verificações previstas: Em engine temporário separado com FKs ativas, a inserção parametrizada deve lançar IntegrityError sem alterar a contagem da tabela.
+Duração do caso (JUnit): 0.043 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+CASO 152 — APROVADO
+ID Pytest: src/app/tests/test_models.py::test_referencias_opcionais_de_historico_aceitam_null
+Fonte: src/app/tests/test_models.py:68
+Objetivo: Verificar referências opcionais nulas nos históricos declarados.
+Parâmetros: sem parametrização.
+Verificações previstas: Permite registro de acesso sem RFID e histórico sem objeto/usuário; confere geração de horário.
+Duração do caso (JUnit): 0.044 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+CASO 153 — APROVADO
+ID Pytest: src/app/tests/test_models.py::test_hierarquia_user_root_e_relacionamento_local
+Fonte: src/app/tests/test_models.py:80
+Objetivo: Verificar herança SQLAlchemy de Root e relacionamento objeto/local.
+Parâmetros: sem parametrização.
+Verificações previstas: Uma busca por User deve carregar Root como subclasse; usuário comum não vira Root; o local relacionado permanece correto.
+Duração do caso (JUnit): 0.023 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+CASO 154 — APROVADO
+ID Pytest: src/app/tests/test_models.py::test_schema_original_sem_novas_tabelas_ou_autenticacao_de_dispositivo
+Fonte: src/app/tests/test_models.py:89
+Objetivo: Verificar que os modelos mantêm o conjunto original de tabelas.
+Parâmetros: sem parametrização.
+Verificações previstas: Exige as oito tabelas originais e somente as colunas mac/local em esp32_registro, sem nova tabela ou credencial de dispositivo.
+Duração do caso (JUnit): 0.013 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+CASO 155 — APROVADO
+ID Pytest: src/app/tests/test_models.py::test_verificacao_fk_dos_modelos_nao_reconfigura_engine_da_api
+Fonte: src/app/tests/test_models.py:95
+Objetivo: Verificar separação entre o engine estrito dos modelos e o engine original da API.
+Parâmetros: sem parametrização.
+Verificações previstas: Confere foreign_keys=1 somente no engine de modelos e foreign_keys=0 no engine da API de teste.
+Duração do caso (JUnit): 0.040 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+ARQUIVO: src/app/tests/test_mqtt.py
+----------------------------------------------------------------------------
+
+CASO 156 — APROVADO
+ID Pytest: src/app/tests/test_mqtt.py::test_configuracao_original_de_broker_topicos_e_rota
+Fonte: src/app/tests/test_mqtt.py:15
+Objetivo: Verificar os identificadores originais da integração MQTT.
+Parâmetros: sem parametrização.
+Verificações previstas: Exige test.mosquitto.org:1883, entrada ESP_envia_tag, resposta Resposta_API e URL terminada em /cadastrar_rfid.
+Duração do caso (JUnit): 0.020 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+CASO 157 — APROVADO
+ID Pytest: src/app/tests/test_mqtt.py::test_conexao_assina_topico_original
+Fonte: src/app/tests/test_mqtt.py:24
+Objetivo: Simular callback de conexão bem-sucedida do MQTT.
+Parâmetros: sem parametrização.
+Verificações previstas: Confere uma assinatura no tópico de entrada original.
+Duração do caso (JUnit): 0.014 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+CASO 158 — APROVADO
+ID Pytest: src/app/tests/test_mqtt.py::test_mensagem_encaminha_json_original_sem_token_ou_cabecalho_novo[200-200]
+Fonte: src/app/tests/test_mqtt.py:32
+Objetivo: Simular mensagem MQTT válida e resposta HTTP da API.
+Parâmetros: {"expected": "200", "http_status": 200}
+Verificações previstas: Confere post com somente URL/json originais e publicação da resposta textual esperada no tópico original; mantém o mapeamento HTTP existente.
+Duração do caso (JUnit): 0.015 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+CASO 159 — APROVADO
+ID Pytest: src/app/tests/test_mqtt.py::test_mensagem_encaminha_json_original_sem_token_ou_cabecalho_novo[201-200]
+Fonte: src/app/tests/test_mqtt.py:32
+Objetivo: Simular mensagem MQTT válida e resposta HTTP da API.
+Parâmetros: {"expected": "200", "http_status": 201}
+Verificações previstas: Confere post com somente URL/json originais e publicação da resposta textual esperada no tópico original; mantém o mapeamento HTTP existente.
+Duração do caso (JUnit): 0.015 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+CASO 160 — APROVADO
+ID Pytest: src/app/tests/test_mqtt.py::test_mensagem_encaminha_json_original_sem_token_ou_cabecalho_novo[400-401]
+Fonte: src/app/tests/test_mqtt.py:32
+Objetivo: Simular mensagem MQTT válida e resposta HTTP da API.
+Parâmetros: {"expected": "401", "http_status": 400}
+Verificações previstas: Confere post com somente URL/json originais e publicação da resposta textual esperada no tópico original; mantém o mapeamento HTTP existente.
+Duração do caso (JUnit): 0.015 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+CASO 161 — APROVADO
+ID Pytest: src/app/tests/test_mqtt.py::test_mensagem_encaminha_json_original_sem_token_ou_cabecalho_novo[401-401]
+Fonte: src/app/tests/test_mqtt.py:32
+Objetivo: Simular mensagem MQTT válida e resposta HTTP da API.
+Parâmetros: {"expected": "401", "http_status": 401}
+Verificações previstas: Confere post com somente URL/json originais e publicação da resposta textual esperada no tópico original; mantém o mapeamento HTTP existente.
+Duração do caso (JUnit): 0.015 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+CASO 162 — APROVADO
+ID Pytest: src/app/tests/test_mqtt.py::test_mensagem_encaminha_json_original_sem_token_ou_cabecalho_novo[403-401]
+Fonte: src/app/tests/test_mqtt.py:32
+Objetivo: Simular mensagem MQTT válida e resposta HTTP da API.
+Parâmetros: {"expected": "401", "http_status": 403}
+Verificações previstas: Confere post com somente URL/json originais e publicação da resposta textual esperada no tópico original; mantém o mapeamento HTTP existente.
+Duração do caso (JUnit): 0.015 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+CASO 163 — APROVADO
+ID Pytest: src/app/tests/test_mqtt.py::test_mensagem_encaminha_json_original_sem_token_ou_cabecalho_novo[404-401]
+Fonte: src/app/tests/test_mqtt.py:32
+Objetivo: Simular mensagem MQTT válida e resposta HTTP da API.
+Parâmetros: {"expected": "401", "http_status": 404}
+Verificações previstas: Confere post com somente URL/json originais e publicação da resposta textual esperada no tópico original; mantém o mapeamento HTTP existente.
+Duração do caso (JUnit): 0.015 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+CASO 164 — APROVADO
+ID Pytest: src/app/tests/test_mqtt.py::test_mensagem_encaminha_json_original_sem_token_ou_cabecalho_novo[500-401]
+Fonte: src/app/tests/test_mqtt.py:32
+Objetivo: Simular mensagem MQTT válida e resposta HTTP da API.
+Parâmetros: {"expected": "401", "http_status": 500}
+Verificações previstas: Confere post com somente URL/json originais e publicação da resposta textual esperada no tópico original; mantém o mapeamento HTTP existente.
+Duração do caso (JUnit): 0.015 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+CASO 165 — APROVADO
+ID Pytest: src/app/tests/test_mqtt.py::test_topico_alheio_nao_encaminha_mensagem
+Fonte: src/app/tests/test_mqtt.py:43
+Objetivo: Simular mensagem de um tópico que a integração não processa.
+Parâmetros: sem parametrização.
+Verificações previstas: Não deve haver encaminhamento HTTP nem publicação de resposta.
+Duração do caso (JUnit): 0.014 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+CASO 166 — APROVADO
+ID Pytest: src/app/tests/test_mqtt.py::test_json_malformado_publica_erro_original[{]
+Fonte: src/app/tests/test_mqtt.py:53
+Objetivo: Simular payload MQTT cujo conteúdo não é JSON válido.
+Parâmetros: {"payload": "b'{'"}
+Verificações previstas: Não deve chamar HTTP; deve publicar o código textual 500 no tópico original.
+Duração do caso (JUnit): 0.014 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+CASO 167 — APROVADO
+ID Pytest: src/app/tests/test_mqtt.py::test_json_malformado_publica_erro_original[nao-e-json]
+Fonte: src/app/tests/test_mqtt.py:53
+Objetivo: Simular payload MQTT cujo conteúdo não é JSON válido.
+Parâmetros: {"payload": "b'nao-e-json'"}
+Verificações previstas: Não deve chamar HTTP; deve publicar o código textual 500 no tópico original.
+Duração do caso (JUnit): 0.014 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+CASO 168 — APROVADO
+ID Pytest: src/app/tests/test_mqtt.py::test_json_malformado_publica_erro_original[]
+Fonte: src/app/tests/test_mqtt.py:53
+Objetivo: Simular payload MQTT cujo conteúdo não é JSON válido.
+Parâmetros: {"payload": "b''"}
+Verificações previstas: Não deve chamar HTTP; deve publicar o código textual 500 no tópico original.
+Duração do caso (JUnit): 0.014 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+CASO 169 — APROVADO
+ID Pytest: src/app/tests/test_mqtt.py::test_falhas_de_rede_publicam_500_com_mocks[ConnectionError]
+Fonte: src/app/tests/test_mqtt.py:63
+Objetivo: Simular erro de conexão, timeout ou RequestException no encaminhamento HTTP.
+Parâmetros: {"failure": "ConnectionError"}
+Verificações previstas: Exige publicação do código textual 500 no tópico de resposta original, sem tráfego externo.
+Duração do caso (JUnit): 0.014 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+CASO 170 — APROVADO
+ID Pytest: src/app/tests/test_mqtt.py::test_falhas_de_rede_publicam_500_com_mocks[Timeout]
+Fonte: src/app/tests/test_mqtt.py:63
+Objetivo: Simular erro de conexão, timeout ou RequestException no encaminhamento HTTP.
+Parâmetros: {"failure": "Timeout"}
+Verificações previstas: Exige publicação do código textual 500 no tópico de resposta original, sem tráfego externo.
+Duração do caso (JUnit): 0.014 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+CASO 171 — APROVADO
+ID Pytest: src/app/tests/test_mqtt.py::test_falhas_de_rede_publicam_500_com_mocks[RequestException]
+Fonte: src/app/tests/test_mqtt.py:63
+Objetivo: Simular erro de conexão, timeout ou RequestException no encaminhamento HTTP.
+Parâmetros: {"failure": "RequestException"}
+Verificações previstas: Exige publicação do código textual 500 no tópico de resposta original, sem tráfego externo.
+Duração do caso (JUnit): 0.015 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+CASO 172 — APROVADO
+ID Pytest: src/app/tests/test_mqtt.py::test_campos_ausentes_continuam_encaminhados_sem_traducao_automatica
+Fonte: src/app/tests/test_mqtt.py:71
+Objetivo: Caracterizar mensagem que traz mac em vez de mac_adress e não traz date.
+Parâmetros: sem parametrização.
+Verificações previstas: A integração continua encaminhando date/mac_adress como None, sem tradução automática; uma resposta HTTP 403 simulada vira código MQTT 401.
+Duração do caso (JUnit): 0.016 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+CASO 173 — APROVADO
+ID Pytest: src/app/tests/test_mqtt.py::test_limite_atual_utf8_invalido_nao_tem_tratamento
+Fonte: src/app/tests/test_mqtt.py:81
+Objetivo: Registrar a limitação atual para payload MQTT com UTF-8 inválido.
+Parâmetros: sem parametrização.
+Verificações previstas: Espera UnicodeDecodeError. Aprovação deste caso confirma a limitação; não significa recuperação bem-sucedida.
+Duração do caso (JUnit): 0.013 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+CASO 174 — APROVADO
+ID Pytest: src/app/tests/test_mqtt.py::test_limite_atual_json_lista_nao_tem_tratamento
+Fonte: src/app/tests/test_mqtt.py:87
+Objetivo: Registrar a limitação atual para JSON MQTT que é uma lista.
+Parâmetros: sem parametrização.
+Verificações previstas: Espera AttributeError. Aprovação deste caso não significa que esse payload seja tratado de forma robusta.
+Duração do caso (JUnit): 0.014 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+CASO 175 — APROVADO
+ID Pytest: src/app/tests/test_mqtt.py::test_resposta_mqtt_preserva_topico_e_codigo_textual[200]
+Fonte: src/app/tests/test_mqtt.py:93
+Objetivo: Verificar publicação de resposta MQTT com código 200, 401 ou 500.
+Parâmetros: {"code": 200}
+Verificações previstas: Confere tópico original e código convertido para texto, sem acrescentar argumentos ao contrato original.
+Duração do caso (JUnit): 0.014 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+CASO 176 — APROVADO
+ID Pytest: src/app/tests/test_mqtt.py::test_resposta_mqtt_preserva_topico_e_codigo_textual[401]
+Fonte: src/app/tests/test_mqtt.py:93
+Objetivo: Verificar publicação de resposta MQTT com código 200, 401 ou 500.
+Parâmetros: {"code": 401}
+Verificações previstas: Confere tópico original e código convertido para texto, sem acrescentar argumentos ao contrato original.
+Duração do caso (JUnit): 0.014 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+CASO 177 — APROVADO
+ID Pytest: src/app/tests/test_mqtt.py::test_resposta_mqtt_preserva_topico_e_codigo_textual[500]
+Fonte: src/app/tests/test_mqtt.py:93
+Objetivo: Verificar publicação de resposta MQTT com código 200, 401 ou 500.
+Parâmetros: {"code": 500}
+Verificações previstas: Confere tópico original e código convertido para texto, sem acrescentar argumentos ao contrato original.
+Duração do caso (JUnit): 0.014 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+CASO 178 — APROVADO
+ID Pytest: src/app/tests/test_mqtt.py::test_erro_na_publicacao_e_registrado_sem_escapar
+Fonte: src/app/tests/test_mqtt.py:99
+Objetivo: Simular exceção no publish do cliente MQTT.
+Parâmetros: sem parametrização.
+Verificações previstas: A função deve capturar a exceção e apresentar a mensagem de erro original.
+Duração do caso (JUnit): 0.014 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+CASO 179 — APROVADO
+ID Pytest: src/app/tests/test_mqtt.py::test_cliente_inicia_callbacks_e_loop_originais
+Fonte: src/app/tests/test_mqtt.py:106
+Objetivo: Simular inicialização completa do cliente MQTT.
+Parâmetros: sem parametrização.
+Verificações previstas: Confere construtor original sem novos parâmetros, callbacks existentes, conexão ao broker/porta originais e chamada de loop_forever.
+Duração do caso (JUnit): 0.014 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+CASO 180 — APROVADO
+ID Pytest: src/app/tests/test_mqtt.py::test_cliente_trata_falha_de_conexao
+Fonte: src/app/tests/test_mqtt.py:118
+Objetivo: Simular indisponibilidade do broker durante connect.
+Parâmetros: sem parametrização.
+Verificações previstas: O loop não deve iniciar e a mensagem original de falha de conexão deve ser apresentada.
+Duração do caso (JUnit): 0.014 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+CASO 181 — APROVADO
+ID Pytest: src/app/tests/test_mqtt.py::test_interrupcao_desconecta_cliente
+Fonte: src/app/tests/test_mqtt.py:128
+Objetivo: Simular KeyboardInterrupt durante o loop MQTT.
+Parâmetros: sem parametrização.
+Verificações previstas: Exige chamada de disconnect no cliente simulado.
+Duração do caso (JUnit): 0.016 s.
+Marcador defeito_api: não.
+Resultado observado: as verificações deste caso passaram na execução de referência.
+
+7. DEZ FALHAS E CAUSAS IDENTIFICADAS
+============================================================================
+API-01 — E-mail duplicado: esperado 400, obtido 500.
+  auth.py passa um set a jsonify. Proposta pendente: corrigir o objeto JSON.
+API-02 — Token usado após logout: esperado 401, obtido 200.
+  Logout e callback consultam conjuntos BLOCKLIST diferentes.
+  Proposta pendente: compartilhar o mesmo conjunto em memória, sem tabela nova.
+API-03 — Novo Root válido: esperado 201, obtido 500.
+  Campo herdado senha ausente e identidade root diferente de roots.
+  Proposta pendente: preencher senha com hash e corrigir o discriminador.
+API-04 — Quatro casos de erros HTTP: 404, 405, 400 e 415 viram 500.
+  Proposta pendente: preservar status/cabeçalhos das exceções HTTP.
+API-05 — Três casos de local incompleto: esperado 400; obtido 200/500/500.
+  Condição de preenchimento incorreta e retorno sem status de erro.
+  Proposta pendente: conferir os três campos existentes e responder 400.
+
+Essas propostas não foram autorizadas nem aplicadas. Documentar os testes
+não constitui aprovação para alterar a API. As dez falhas continuam visíveis.
+
+8. CONTRATOS E LIMITES DA VALIDAÇÃO
+----------------------------------------------------------------------------
+HTTP /cadastrar_rfid: uid, date, mac_adress; verificação de MAC cadastrado.
+HTTP /acessar_porta: uid_solicitante e local; nenhuma autenticação extra adicionada.
+MQTT: test.mosquitto.org:1883, entrada ESP_envia_tag, resposta Resposta_API.
+A integração segue com URL/json originais e respostas textuais 200/401/500.
+HTTP 500 recebido da API ainda vira MQTT 401, conforme o código existente.
+Payload MQTT com mac e sem date não é traduzido automaticamente.
+UTF-8 inválido e JSON em lista continuam sem recuperação; o catálogo explicita isso.
+MAC informável pelo cliente não é autenticação criptográfica; nenhuma proteção
+adicional de dispositivo foi introduzida nesta etapa.
+
+Não houve broker real, ESP32, compilação/envio de firmware, navegador,
+Docker/Compose, implantação ou execução remota de CI nesta etapa de testes.
+Socket.IO foi exercitado em processo; SQLite e arquivos foram isolados.
+Os exemplos versionados de firmware possuem divergências de campo/tópico
+documentadas no relatório anterior; não foram alterados ou declarados compatíveis fisicamente.
+
+9. REPRODUÇÃO
+----------------------------------------------------------------------------
+Execute da raiz do repositório:
+
+  python3 -m venv .venv
+  .venv/bin/python -m pip install -r requirements-dev.txt
+  .venv/bin/python -m pip check
+  .venv/bin/python -B -m pytest -q -p no:cacheprovider
+
+Para um caso específico, copie seu ID Pytest do catálogo entre aspas:
+
+  .venv/bin/python -B -m pytest -q -p no:cacheprovider "ID_PYTEST_DO_CASO"
+
+Para gerar cobertura, JUnit e tempos:
+
+  SAFE_TRACK_REPORT_DIR="$(mktemp -d /tmp/safe-track-etapa1.XXXXXX)"
+  COVERAGE_FILE="$SAFE_TRACK_REPORT_DIR/.coverage" .venv/bin/python -B -m pytest -q \
+    -p no:cacheprovider --cov --cov-report=term-missing \
+    --cov-report="xml:$SAFE_TRACK_REPORT_DIR/coverage.xml" \
+    --cov-report="json:$SAFE_TRACK_REPORT_DIR/coverage.json" \
+    --junitxml="$SAFE_TRACK_REPORT_DIR/junit.xml" \
+    --api-timings="$SAFE_TRACK_REPORT_DIR/api-timings.json"
+
+O código de saída da suíte completa é 1 enquanto as dez falhas permanecerem.
+Não é necessário banco real, broker, hardware ou credencial de implantação.
+
+10. EVIDÊNCIAS E VERSÕES
+----------------------------------------------------------------------------
+Diretório local da execução: /tmp/safe-track-etapa1-w8qcl86z
+  pytest-completo.txt — stdout, falhas, avisos e resumo.
+  junit.xml — resultado e duração de cada caso.
+  coverage.json / coverage.xml — cobertura detalhada.
+  api-timings.json — tempos HTTP do cliente em processo.
+  preservacao.json — comparação dos arquivos monitorados.
+  pip-check.txt — consistência das dependências.
+  requirements-tested.txt — versões efetivamente instaladas.
+
+Os artefatos em /tmp podem ser removidos pelo sistema. Este TXT permanece
+em documents/ e guarda o catálogo e os resultados de referência.
+As versões abaixo registram o ambiente usado; requisitos sem pin podem
+resolver versões diferentes em uma instalação futura.
+
+amqp==5.4.2
+bidict==0.24.1
+billiard==4.3.2
+blinker==1.9.0
+celery==5.7.0
+certifi==2026.10.23
+charset-normalizer==3.5.2
+click==8.5.1
+click-didyoumean==0.3.1
+click-plugins==1.1.1.2
+click-repl==0.4.1
+coverage==7.17.3
+dnspython==2.9.2
+eventlet==0.41.3
+Flask==3.1.3
+flask-cors==6.0.5
+Flask-JWT-Extended==4.7.4
+Flask-Login==0.6.3
+Flask-MQTT==1.3.0
+Flask-SocketIO==5.7.2
+Flask-SQLAlchemy==3.1.1
+greenlet==3.5.6
+h11==0.16.0
+idna==3.20
+iniconfig==2.3.1
+itsdangerous==2.2.0
+Jinja2==3.1.6
+kombu==5.7.0
+MarkupSafe==3.0.4
+packaging==26.3
+paho-mqtt==2.2.0
+pluggy==1.7.0
+prompt_toolkit==3.0.53
+Pygments==2.21.0
+PyJWT==2.15.1
+pytest==9.2.0
+pytest-cov==7.1.0
+python-dateutil==2.9.0.post0
+python-engineio==4.15.1
+python-socketio==5.18.1
+requests==2.34.2
+simple-websocket==1.1.0
+six==1.17.0
+SQLAlchemy==2.1.9
+typing_extensions==4.16.0
+tzlocal==5.4.5
+urllib3==2.8.0
+vine==5.1.0
+wcwidth==0.9.4
+Werkzeug==3.1.9
+wsproto==1.3.2
+
+FIM — 181 casos individuais documentados; 171 aprovados e 10 reprovados.
+Nenhuma etapa seguinte ou correção da aplicação foi executada nesta documentação.

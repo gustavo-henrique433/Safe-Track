@@ -37,6 +37,8 @@ from app.routes.object import object_bp
 from app.routes.local import local_bp
 from app.routes.control_door import control_door_bp 
 from app.routes.esp32 import esp32_bp        
+from app.routes.visitors import visitors_bp
+from app.routes.dashboards import dashboards_bp
   
             
 
@@ -105,6 +107,8 @@ app.register_blueprint(auth_bp)
 app.register_blueprint(local_bp)
 app.register_blueprint(control_door_bp )
 app.register_blueprint(esp32_bp )
+app.register_blueprint(visitors_bp)
+app.register_blueprint(dashboards_bp)
 
 with app.app_context():
     db.create_all()

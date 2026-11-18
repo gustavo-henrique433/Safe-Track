@@ -12,8 +12,10 @@ Logs/
 database/hermes.db
 
 .env
-.venv
+ venv
+.venv 
 
 
+venv/
 .venv/
 env/

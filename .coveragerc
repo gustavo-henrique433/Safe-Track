@@ -1,0 +1,11 @@
+[run]
+branch = True
+source =
+    src/app
+    src/database
+    src/logs
+omit =
+    src/app/tests/*
+
+[report]
+show_missing = True

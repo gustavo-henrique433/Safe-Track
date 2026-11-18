@@ -1,0 +1,993 @@
+SAFE-TRACK — PERMISSÕES INDIVIDUAIS: FRONT-END E VALIDAÇÃO
+Data UTC: 2026-11-18T15:23:40.412495+00:00
+Branch: desenvolvimento
+Etapa C concluída; Etapa D executada com dados isolados; relatório de entrega.
+
+1. ESCOPO E DIRETRIZES
+
+Esta entrega segue a autorização para continuar a integração visual do controle
+individual de acesso. A Etapa B já havia criado as regras e os endpoints.
+Não houve nova alteração de modelos, backend, rotas ou regra de autorização.
+Foram adaptadas somente as áreas Pessoas e Locais e seus componentes próprios.
+
+O estado inicial desta etapa foi preservado por hashes em:
+/tmp/safe-track-permissoes-ui-d3tck6c6/baseline.json
+A comparação considerou 2308 arquivos preexistentes, incluindo alterações
+anteriores ainda não commitadas. Bancos reais, logs, .git, .venv e caches foram
+excluídos sem abrir seus conteúdos. A .gitignore do usuário foi preservada.
+Nenhum commit, push, merge, reset ou troca de branch foi executado.
+
+2. COMO UTILIZAR
+
+Pessoas:
+- Entre como Root e abra Gestão de Pessoas pela navegação existente.
+- Na Lista de Contas, use Permissões na linha da pessoa. Também é possível
+  consultar diretamente o ID de uma conta ou visitante no painel novo.
+- A consulta identifica nome/ID, tipo original, UID, situação da credencial,
+  validade global e autorizações por sala.
+- Selecione uma sala para conceder uma autorização ou consultar o vínculo atual.
+- Para uma autorização nova, informe as datas opcionais e clique Conceder.
+- Para um vínculo existente, Salvar vigência envia somente datas alteradas.
+  Limpar uma data envia null. Campos inalterados preservam os valores originais,
+  inclusive precisão de microssegundos recebida da API.
+- Uma permissão revogada continua revogada ao salvar datas. Reativar autorização
+  é uma ação separada, confirmada, que mantém o período previamente salvo.
+- Revogar solicita confirmação e afeta somente o par pessoa/sala.
+- Vincular Cartão RFID permanece no formulário original acima do novo painel,
+  utilizando a rota e os campos existentes. Nenhuma nova regra patrimonial foi
+  criada. Após vincular, consulte novamente a pessoa para atualizar o resumo.
+
+Locais:
+- Abra Salas e Instalações e clique Autorizados na linha da sala, ou consulte
+  seu ID no painel Pessoas autorizadas por sala.
+- O filtro inicial Autorizados agora considera simultaneamente pessoa,
+  credencial e autorização individual aptas no instante da consulta.
+- Todas as permissões permite também gerenciar vínculos expirados/revogados.
+- Os filtros Vigente, Agendada, Expirada e Revogada correspondem exclusivamente
+  à situação da permissão individual; a coluna Acesso agora mostra separadamente
+  o resultado efetivo recebido da API.
+- A lista mostra nome/ID, tipo, UID, credencial e validade global, início/fim
+  individual, situação, acesso efetivo e ações.
+- Gerenciar abre Pessoas com a pessoa e a sala selecionadas.
+- O campo ID da pessoa abaixo da lista permite iniciar a concessão para outra
+  pessoa na sala consultada, usando o mesmo editor.
+- Revogar não exclui a pessoa, não remove sua tag e não afeta as outras salas.
+
+As listagens usam 25 linhas por página. O editor consulta o vínculo existente
+por páginas de até 100 antes de apresentar a concessão/edição, inclusive quando
+ele estiver fora da página visível. Não depende apenas das linhas da tabela.
+Para atualizar situações que mudaram com o tempo, consulte novamente.
+
+3. VALIDADE, AUTENTICAÇÃO E COMPORTAMENTO DA INTERFACE
+
+Horários são apresentados no fuso do navegador, informado ao lado do editor.
+Datas digitadas são convertidas para ISO 8601 UTC antes do envio. O backend
+continua decidindo a validade com o relógio do servidor.
+Uma autorização individual sem limite não elimina a vigência global do visitante.
+Uma autorização vigente pode aparecer com acesso negado quando a credencial
+estiver expirada, revogada, inativa ou não cadastrada.
+Usuário comum e visitante continuam os tipos originais; Root, quando consultado,
+é identificado como o tipo administrativo já existente, sem nova hierarquia.
+
+O módulo reutiliza o JWT humano em memória. Não há alteração de login/logout,
+emissão ou revogação de tokens. O backend Root é a autoridade administrativa.
+Os novos componentes não fazem consultas de permissões durante o login.
+HTTP 401/403 limpa os dados novos e exibe a restrição de acesso. Falhas de rede,
+JSON inválido e erros da API geram mensagens visíveis, sem anunciar gravação.
+Ao sair, os formulários e dados novos são limpos por observação da tela de login
+existente, sem modificar suas funções. Respostas atrasadas de outra pessoa,
+sala, editor ou sessão são descartadas. Gravações simultâneas pelo formulário
+são bloqueadas enquanto há uma gravação pendente.
+Dados recebidos são inseridos com textContent/Option, sem interpretar HTML.
+As tabelas têm região identificada e rolagem interna, com controles rotulados,
+mensagens anunciadas e indicação de foco. A aparência Dark Enterprise foi mantida.
+
+4. ARQUIVOS DESTA ETAPA E JUSTIFICATIVAS
+
+Criados:
+src/app/templates/permissions_people.html
+  Painel de consulta, vigência, concessão e revogação em Pessoas.
+src/app/templates/permissions_local.html
+  Consulta de autorizados por sala, filtros, paginação e ações relacionadas.
+src/app/static/permissions.js
+  Chamadas aos endpoints aprovados, controles, datas e proteção contra respostas
+  antigas. Sem novas dependências ou frameworks.
+src/app/static/permissions.css
+  Estilos responsivos limitados aos componentes .st-permissions.
+src/app/tests/test_permissions_frontend.py
+  Três casos: assets existentes do Flask e amostras reais dos novos fluxos usando
+  exclusivamente SQLite isolado. Exportação opcional limitada a /tmp.
+src/app/tests/frontend/permissions.test.cjs
+  25 cenários DOM de interação, contratos, validade, erros e isolamento de sessão.
+documents/permissoes_individuais_frontend.txt
+  Este relatório, com os resultados e o catálogo dos testes executados.
+
+Modificados nesta etapa:
+src/app/templates/index.html
+  Coluna Permissões em Pessoas, inclusão dos dois componentes dentro das seções
+  correspondentes e carregamento dos dois assets novos. Todo o restante foi
+  comparado por reconstituição e permanece exatamente como no início da etapa.
+src/app/static/script.js
+  Somente dois botões acrescentados às linhas de Pessoas/Locais. O conteúdo
+  completo restante, inclusive login/logout e funções de RFID, foi preservado.
+src/app/tests/frontend/admin.test.cjs
+  Carrega também o novo módulo no harness; mantém as 57 verificações anteriores.
+
+A auditoria confirmou exatamente três arquivos preexistentes alterados e sete
+arquivos criados nesta etapa. Não confundir com o git status cumulativo, que
+também contém todas as entregas e alterações do usuário anteriores a esta etapa.
+
+5. CONTRATOS CONSUMIDOS, SEM CRIAÇÃO OU ALTERAÇÃO DE ROTAS NESTA ETAPA
+
+GET /pessoas/<pessoa_id>/permissoes?pagina=1&limite=25
+  Identificação da pessoa, validade global e permissões individuais.
+PUT /pessoas/<pessoa_id>/permissoes/<local_id>
+  Nova concessão: {"inicio":null,"expiracao":null,"revogada":false}.
+  Edição: somente inicio/expiracao efetivamente alterados.
+  Reativação explícita: {"revogada":false}.
+POST /pessoas/<pessoa_id>/permissoes/<local_id>/revogar
+  Sem corpo adicional; revogação específica do vínculo existente.
+GET /locais/<local_id>/autorizacoes?pagina=1&limite=25
+  Padrão: autorizados efetivos; situacao=todas ou um dos quatro estados para
+  consultar situações individuais.
+GET /listar_locais
+  Lista original de salas para o seletor, sem alterar seu contrato.
+POST /atribuir_rfid_usuario
+  Vínculo RFID original: id_usuario e uid_usuario; formulário/rota preservados.
+GET /visualizar_todos_usuarios
+  Listagem original das contas preservada; dados adicionais vêm das novas rotas.
+
+6. ESTRUTURAS E LÓGICA DA ETAPA B REUTILIZADAS
+
+User/Visitante e o vínculo RFID original continuam representando as pessoas.
+A tabela aprovada permissoes_acesso, criada na Etapa B, usa pessoa_id/local_id
+como chave composta e início, expiração e revogada para a autorização individual.
+Nada disso foi modificado nesta etapa de interface.
+A rota física POST /acessar_porta continua com os campos e respostas existentes,
+e com a verificação individual acrescentada anteriormente. Ausência de permissão,
+credencial inválida, expiração e revogação negam o acesso. Falha interna não abre
+a porta. A pessoa Root também precisa de autorização física explícita.
+O histórico e a extensão de visitantes continuam os da implementação aprovada.
+Os detalhes de modelos, endpoints e 93 testes de backend estão em:
+documents/permissoes_individuais_backend.txt
+
+7. PRESERVAÇÃO E LIMITAÇÕES REAIS
+
+Preservados nesta etapa: backend inteiro, modelos, HTTP/MQTT, firmware, broker,
+tópicos, payloads, identificação por MAC, Docker/Compose, portas, volumes,
+requirements.txt, configuração Flask, logger e apresentação do terminal.
+Também foram preservados a página inicial, painel RFID, cabeçalho, navegação,
+login, patrimônio, Registro Global, Visitantes, Indicadores, relatórios e CSV.
+Os arquivos admin.html/admin.js/admin.css são idênticos ao início desta etapa.
+
+Não foi aberto, migrado, recriado, apagado ou consultado o banco real.
+O backfill controlado da Etapa B não foi executado em produção. A tabela antiga
+visitante_locais não é fallback de autorização. Antes de utilizar credenciais
+legadas no banco real, ainda é necessário planejar e autorizar a transferência
+controlada dessas relações; a interface não realiza essa transferência.
+
+Limitação do protocolo já analisada e aprovada: /cadastrar_rfid valida o MAC
+cadastrado; /acessar_porta originalmente não recebe MAC. Essa rota não passou
+a validar MAC nesta etapa e nenhum campo/token foi imposto ao ESP32. A ponte
+MQTT existente permanece voltada ao processamento de leituras RFID.
+Identificação apenas por MAC não impede falsificação de endereço. O protótipo
+foi mantido conforme a autorização, sem criar mecanismos de dispositivo.
+
+Não foram ligados ESP32 físico, atuador, broker externo, Docker ou API real para
+os testes. Sucesso em simulação não comprova abertura física nem comunicação
+externa ponta a ponta. CDN Tailwind original não foi validado pelo navegador:
+usou-se o CSS compilado de teste já disponível em /tmp, sem mudar a aplicação.
+As ferramentas opcionais Node/jsdom/Chromium continuam apenas em /tmp; nenhuma
+dependência de execução foi acrescentada ao projeto.
+
+As referências ausentes a IDs de reset nos formulários antigos de cadastro de
+conta e vínculo RFID continuam documentadas como defeitos de interface
+preexistentes. Não foram corrigidas como parte da integração de permissões.
+
+8. RESULTADOS REAIS
+
+Pytest completo: 525 casos, 515 PASSARAM, 10 FALHARAM, zero erros/skip/xfail.
+Duração registrada: 34,25 s; 155 avisos. Saída 1 devido às falhas conhecidas.
+Todos os três casos novos desta etapa passaram; os 93 novos casos de backend
+introduzidos na Etapa B continuam passando no conjunto completo.
+As dez falhas são exatamente os mesmos IDs da execução final da Etapa B.
+Não foram ocultadas, reclassificadas ou corrigidas fora do escopo.
+
+Falhas conhecidas preservadas:
+- Cadastro com e-mail duplicado: 500 em vez de 400.
+- Token aceito após logout.
+- Cadastro de Root válido: 500 em vez de 201.
+- Rota desconhecida: 500 em vez de 404.
+- Método incorreto em /login: 500 em vez de 405.
+- JSON malformado: 500 em vez de 400.
+- Content-Type incorreto: 500 em vez de 415.
+- Local sem endereco: 200 em vez de 400.
+- Local sem descricao: 500 em vez de 400.
+- Local sem responsavel: 500 em vez de 400.
+
+Cobertura de instruções: 1266/1290 = 98.1395%.
+Cobertura de desvios: 306/318 = 96.2264%.
+Cobertura combinada indicada pelo coverage: 97.7612%.
+São métricas Python; não representam cobertura de hardware ou de JavaScript.
+
+DOM com jsdom: 82/82 PASSARAM (57 anteriores + 25 cenários de permissões).
+Os exemplos de resposta vieram dos endpoints reais no SQLite de teste. Erros,
+concorrência e páginas adicionais foram simulados no harness, sem conexão real.
+Chromium 153.0.8010.0: 47/47 verificações PASSARAM; zero erros de
+JavaScript e zero requisições não previstas. Larguras 1440, 768 e 390 pixels.
+Seis capturas foram geradas e as telas desktop/mobile foram inspecionadas.
+O runner interceptou toda a rede, inclusive login, assets e chamadas à API.
+
+Tempos do cliente Flask em processo, sem rede ou hardware:
+{"requests": 551, "mean_ms": 11.901, "median_ms": 5.437, "p95_ms": 39.317, "max_ms": 231.334, "scope": "Cliente Flask em processo; sem rede, broker ou ESP32."}
+Não comparar esses tempos com latência real da VM, ESP32 ou broker.
+
+9. EVIDÊNCIAS E REPRODUÇÃO
+
+Diretório de artefatos isolados:
+/tmp/safe-track-permissoes-ui-d3tck6c6
+pytest.txt / pytest.xml: execução completa e resultados por caso.
+coverage.json / coverage.xml: cobertura Python.
+timings.json: tempos do cliente Flask isolado.
+index-renderizado.html / frontend-api.json / permissions-api.json: amostras
+fictícias e HTML real usados pelos testes de interface.
+dom.txt / dom.xml: execução dos 82 cenários DOM.
+browser/permissions-visual.json: 47 verificações e geometria responsiva.
+browser/pessoas-1440.png, pessoas-768.png, pessoas-390.png.
+browser/locais-1440.png, locais-768.png, locais-390.png.
+preservacao.json: hashes finais e comprovação de escopo.
+git-status.txt / git-diff-stat.txt: estado cumulativo do repositório.
+
+Comandos centrais executados a partir da raiz (ferramentas temporárias já
+existentes; não acrescentam dependências à API):
+
+SAFE_TRACK_FRONTEND_ARTIFACTS=/tmp/safe-track-permissoes-ui-d3tck6c6 COVERAGE_FILE=/tmp/safe-track-permissoes-ui-d3tck6c6/.coverage PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m pytest -q --tb=short -p no:cacheprovider --basetemp=/tmp/safe-track-permissoes-ui-d3tck6c6/pytest-full --cov --cov-report=json:/tmp/safe-track-permissoes-ui-d3tck6c6/coverage.json --cov-report=xml:/tmp/safe-track-permissoes-ui-d3tck6c6/coverage.xml --junitxml=/tmp/safe-track-permissoes-ui-d3tck6c6/pytest.xml --api-timings=/tmp/safe-track-permissoes-ui-d3tck6c6/timings.json
+
+NODE_PATH=/tmp/safe-track-etapa4-6hw3q39w/js-tools/node_modules SAFE_TRACK_FRONTEND_ARTIFACTS=/tmp/safe-track-permissoes-ui-d3tck6c6 TZ=America/Sao_Paulo /tmp/safe-track-etapa4-6hw3q39w/node-v26.13.1-linux-x64/bin/node --test src/app/tests/frontend/admin.test.cjs src/app/tests/frontend/permissions.test.cjs
+
+SAFE_TRACK_FRONTEND_ARTIFACTS=/tmp/safe-track-permissoes-ui-d3tck6c6 TMPDIR=/tmp/safe-track-browser-knoinf6m/runtime /tmp/safe-track-etapa4-6hw3q39w/node-v26.13.1-linux-x64/bin/node /tmp/safe-track-browser-knoinf6m/permissions-visual.mjs
+
+Os caminhos /tmp são temporários. O relatório .txt e os testes novos permanecem
+no projeto; conservar os artefatos temporários separadamente se necessário.
+Testes usam conftest.py com SQLite em memória, rede bloqueada e logs/uploads
+temporários. Não importar a aplicação manualmente para executar estes testes.
+
+10. GIT STATUS --SHORT (CUMULATIVO)
+
+M .gitignore
+ M pytest.ini
+ M src/app/routes/app.py
+ M src/app/routes/control_door.py
+ M src/app/static/script.js
+ M src/app/templates/index.html
+ M src/app/tests/test_auth.py
+ M src/database/models.py
+?? .coveragerc
+?? .venv/
+?? documents/documentacao_completa_testes_etapa1.txt
+?? documents/etapa1_pytest_preservacao.md
+?? documents/etapa2_visitantes.txt
+?? documents/etapa3_dashboards_relatorios.txt
+?? documents/etapa4_frontend.txt
+?? documents/permissoes_individuais_backend.txt
+?? documents/permissoes_individuais_frontend.txt
+?? documents/proposta_etapa2_visitantes.txt
+?? documents/reorganizacao_dashboard_operacional.txt
+?? documents/reorganizacao_visual_relatorios.txt
+?? requirements-dev.txt
+?? src/app/routes/dashboards.py
+?? src/app/routes/visitors.py
+?? src/app/services/dashboards/
+?? src/app/static/admin.css
+?? src/app/static/admin.js
+?? src/app/static/permissions.css
+?? src/app/static/permissions.js
+?? src/app/templates/admin.html
+?? src/app/templates/permissions_local.html
+?? src/app/templates/permissions_people.html
+?? src/app/tests/conftest.py
+?? src/app/tests/frontend/
+?? src/app/tests/test_access.py
+?? src/app/tests/test_dashboards.py
+?? src/app/tests/test_frontend.py
+?? src/app/tests/test_http.py
+?? src/app/tests/test_inventory.py
+?? src/app/tests/test_models.py
+?? src/app/tests/test_mqtt.py
+?? src/app/tests/test_permissions.py
+?? src/app/tests/test_permissions_frontend.py
+?? src/app/tests/test_visitors.py
+?? src/database/permission_legacy.py
+
+11. GIT DIFF --STAT (CUMULATIVO; NÃO INCLUI ARQUIVOS UNTRACKED)
+
+.gitignore                     |   4 +-
+ pytest.ini                     |   6 +-
+ src/app/routes/app.py          |   4 +
+ src/app/routes/control_door.py | 206 +++++++++++++++++++++++++++++++++++++++--
+ src/app/static/script.js       |   4 +
+ src/app/templates/index.html   |  19 +++-
+ src/app/tests/test_auth.py     | 175 +++++++++++++++++++++++++++++-----
+ src/database/models.py         |  77 ++++++++++++++-
+ 8 files changed, 457 insertions(+), 38 deletions(-)
+
+As diferenças anteriores foram preservadas. O recorte desta etapa corresponde
+aos três arquivos modificados e sete criados descritos na seção 4.
+
+12. CATÁLOGO COMPLETO DO PYTEST EXECUTADO
+
+Formato: resultado | identificação | duração em segundos.
+PASSOU | src.app.tests.test_access::test_fluxo_original_da_porta_e_historico[credencial_valida] | 1.377
+PASSOU | src.app.tests.test_access::test_fluxo_original_da_porta_e_historico[conta_inativa] | 0.040
+PASSOU | src.app.tests.test_access::test_fluxo_original_da_porta_e_historico[credencial_desconhecida] | 0.037
+PASSOU | src.app.tests.test_access::test_porta_sem_local_valido_nao_cria_evento[payload0-400] | 0.035
+PASSOU | src.app.tests.test_access::test_porta_sem_local_valido_nao_cria_evento[payload1-404] | 0.032
+PASSOU | src.app.tests.test_access::test_porta_sem_local_valido_nao_cria_evento[payload2-404] | 0.030
+PASSOU | src.app.tests.test_access::test_falha_ao_persistir_acesso_nao_abre_porta | 0.034
+PASSOU | src.app.tests.test_auth::test_login_dinamico[credenciais_validas] | 0.168
+PASSOU | src.app.tests.test_auth::test_login_dinamico[senha_incorreta] | 0.273
+PASSOU | src.app.tests.test_auth::test_login_dinamico[outra_senha_incorreta] | 0.227
+PASSOU | src.app.tests.test_auth::test_login_dinamico[usuario_inexistente] | 0.047
+PASSOU | src.app.tests.test_auth::test_login_dinamico[email_vazio] | 0.045
+PASSOU | src.app.tests.test_auth::test_login_emite_jwt_com_identidade_e_expiracao[root] | 0.238
+PASSOU | src.app.tests.test_auth::test_login_emite_jwt_com_identidade_e_expiracao[user] | 0.234
+PASSOU | src.app.tests.test_auth::test_cadastro_publico_preserva_contrato_e_armazena_hash | 0.663
+PASSOU | src.app.tests.test_auth::test_cadastro_incompleto_nao_persiste[vazio] | 0.105
+PASSOU | src.app.tests.test_auth::test_cadastro_incompleto_nao_persiste[somente_nome] | 0.050
+PASSOU | src.app.tests.test_auth::test_cadastro_incompleto_nao_persiste[sem_senha] | 0.050
+PASSOU | src.app.tests.test_auth::test_cadastro_incompleto_nao_persiste[sem_nome] | 0.048
+FALHOU | src.app.tests.test_auth::test_cadastro_email_duplicado_deve_retornar_400 | 0.057
+PASSOU | src.app.tests.test_auth::test_permissoes_administrativas_existentes[None-401-post-/registrar_root] | 0.055
+PASSOU | src.app.tests.test_auth::test_permissoes_administrativas_existentes[None-401-post-/atribuir_rfid_usuario] | 0.055
+PASSOU | src.app.tests.test_auth::test_permissoes_administrativas_existentes[None-401-get-/visualizar_todos_usuarios] | 0.049
+PASSOU | src.app.tests.test_auth::test_permissoes_administrativas_existentes[None-401-post-/cadastrar_objeto] | 0.049
+PASSOU | src.app.tests.test_auth::test_permissoes_administrativas_existentes[None-401-put-/recadastrar_objeto] | 0.054
+PASSOU | src.app.tests.test_auth::test_permissoes_administrativas_existentes[None-401-delete-/excluir_objeto] | 0.066
+PASSOU | src.app.tests.test_auth::test_permissoes_administrativas_existentes[None-401-post-/cadastrar_local] | 0.052
+PASSOU | src.app.tests.test_auth::test_permissoes_administrativas_existentes[None-401-put-/editar_local] | 0.050
+PASSOU | src.app.tests.test_auth::test_permissoes_administrativas_existentes[None-401-delete-/excluir_rfid] | 0.050
+PASSOU | src.app.tests.test_auth::test_permissoes_administrativas_existentes[user-403-post-/registrar_root] | 0.059
+PASSOU | src.app.tests.test_auth::test_permissoes_administrativas_existentes[user-403-post-/atribuir_rfid_usuario] | 0.076
+PASSOU | src.app.tests.test_auth::test_permissoes_administrativas_existentes[user-403-get-/visualizar_todos_usuarios] | 0.055
+PASSOU | src.app.tests.test_auth::test_permissoes_administrativas_existentes[user-403-post-/cadastrar_objeto] | 0.052
+PASSOU | src.app.tests.test_auth::test_permissoes_administrativas_existentes[user-403-put-/recadastrar_objeto] | 0.053
+PASSOU | src.app.tests.test_auth::test_permissoes_administrativas_existentes[user-403-delete-/excluir_objeto] | 0.055
+PASSOU | src.app.tests.test_auth::test_permissoes_administrativas_existentes[user-403-post-/cadastrar_local] | 0.052
+PASSOU | src.app.tests.test_auth::test_permissoes_administrativas_existentes[user-403-put-/editar_local] | 0.052
+PASSOU | src.app.tests.test_auth::test_permissoes_administrativas_existentes[user-403-delete-/excluir_rfid] | 0.055
+PASSOU | src.app.tests.test_auth::test_jwt_invalido_nao_acessa_rota_protegida[expired-401] | 0.052
+PASSOU | src.app.tests.test_auth::test_jwt_invalido_nao_acessa_rota_protegida[malformed-422] | 0.047
+PASSOU | src.app.tests.test_auth::test_jwt_invalido_nao_acessa_rota_protegida[wrong_signature-422] | 0.061
+PASSOU | src.app.tests.test_auth::test_jwt_invalido_nao_acessa_rota_protegida[refresh-422] | 0.049
+PASSOU | src.app.tests.test_auth::test_callback_existente_rejeita_jti_na_blocklist_da_aplicacao | 0.060
+PASSOU | src.app.tests.test_auth::test_logout_registra_jti_no_conjunto_da_rota | 0.061
+FALHOU | src.app.tests.test_auth::test_token_deve_ser_rejeitado_apos_logout | 0.111
+FALHOU | src.app.tests.test_auth::test_root_pode_cadastrar_outro_root_valido | 0.273
+PASSOU | src.app.tests.test_auth::test_associacao_usuario_rfid_rejeita_conflitos[payload0-400] | 0.065
+PASSOU | src.app.tests.test_auth::test_associacao_usuario_rfid_rejeita_conflitos[payload1-404] | 0.081
+PASSOU | src.app.tests.test_auth::test_associacao_usuario_rfid_rejeita_conflitos[payload2-404] | 0.077
+PASSOU | src.app.tests.test_auth::test_associacao_usuario_rfid_rejeita_conflitos[payload3-409] | 0.083
+PASSOU | src.app.tests.test_auth::test_associacao_usuario_rfid_rejeita_conflitos[payload4-409] | 0.066
+PASSOU | src.app.tests.test_auth::test_associacao_usuario_rfid_rejeita_conflitos[payload5-404] | 0.076
+PASSOU | src.app.tests.test_auth::test_associacao_usuario_rfid_valida | 0.090
+PASSOU | src.app.tests.test_auth::test_consulta_usuarios_root_nao_retorna_hashes | 0.063
+PASSOU | src.app.tests.test_auth::test_busca_usuario_por_uid_preserva_rota_publica[c3d4e5f6-200] | 0.069
+PASSOU | src.app.tests.test_auth::test_busca_usuario_por_uid_preserva_rota_publica[inexistente-404] | 0.056
+PASSOU | src.app.tests.test_dashboards::test_relatorios_exigem_root[None-401-/api/dashboards/resumo] | 0.084
+PASSOU | src.app.tests.test_dashboards::test_relatorios_exigem_root[None-401-/api/relatorios/acessos] | 0.087
+PASSOU | src.app.tests.test_dashboards::test_relatorios_exigem_root[None-401-/api/relatorios/acessos.csv] | 0.073
+PASSOU | src.app.tests.test_dashboards::test_relatorios_exigem_root[None-401-/api/relatorios/atividades] | 0.071
+PASSOU | src.app.tests.test_dashboards::test_relatorios_exigem_root[user-403-/api/dashboards/resumo] | 0.074
+PASSOU | src.app.tests.test_dashboards::test_relatorios_exigem_root[user-403-/api/relatorios/acessos] | 0.071
+PASSOU | src.app.tests.test_dashboards::test_relatorios_exigem_root[user-403-/api/relatorios/acessos.csv] | 0.075
+PASSOU | src.app.tests.test_dashboards::test_relatorios_exigem_root[user-403-/api/relatorios/atividades] | 0.090
+PASSOU | src.app.tests.test_dashboards::test_relatorios_exigem_root[visitante-403-/api/dashboards/resumo] | 0.081
+PASSOU | src.app.tests.test_dashboards::test_relatorios_exigem_root[visitante-403-/api/relatorios/acessos] | 0.086
+PASSOU | src.app.tests.test_dashboards::test_relatorios_exigem_root[visitante-403-/api/relatorios/acessos.csv] | 0.071
+PASSOU | src.app.tests.test_dashboards::test_relatorios_exigem_root[visitante-403-/api/relatorios/atividades] | 0.070
+PASSOU | src.app.tests.test_dashboards::test_token_sem_usuario_cadastrado_nao_acessa_relatorios[/api/dashboards/resumo] | 0.050
+PASSOU | src.app.tests.test_dashboards::test_token_sem_usuario_cadastrado_nao_acessa_relatorios[/api/relatorios/acessos] | 0.049
+PASSOU | src.app.tests.test_dashboards::test_token_sem_usuario_cadastrado_nao_acessa_relatorios[/api/relatorios/acessos.csv] | 0.045
+PASSOU | src.app.tests.test_dashboards::test_token_sem_usuario_cadastrado_nao_acessa_relatorios[/api/relatorios/atividades] | 0.053
+PASSOU | src.app.tests.test_dashboards::test_resumo_sem_eventos_diferencia_zero_de_indicador_indisponivel | 0.126
+PASSOU | src.app.tests.test_dashboards::test_resumo_conta_eventos_e_situacoes_de_visitantes_sem_sobreposicao | 0.146
+PASSOU | src.app.tests.test_dashboards::test_filtros_coerentes_no_resumo_json_e_csv[filters0-ids0-counts0] | 0.211
+PASSOU | src.app.tests.test_dashboards::test_filtros_coerentes_no_resumo_json_e_csv[filters1-ids1-counts1] | 0.341
+PASSOU | src.app.tests.test_dashboards::test_filtros_coerentes_no_resumo_json_e_csv[filters2-ids2-counts2] | 0.220
+PASSOU | src.app.tests.test_dashboards::test_filtros_coerentes_no_resumo_json_e_csv[filters3-ids3-counts3] | 0.180
+PASSOU | src.app.tests.test_dashboards::test_filtros_coerentes_no_resumo_json_e_csv[filters4-ids4-counts4] | 0.207
+PASSOU | src.app.tests.test_dashboards::test_filtros_coerentes_no_resumo_json_e_csv[filters5-ids5-counts5] | 0.157
+PASSOU | src.app.tests.test_dashboards::test_filtros_coerentes_no_resumo_json_e_csv[filters6-ids6-counts6] | 0.187
+PASSOU | src.app.tests.test_dashboards::test_filtros_coerentes_no_resumo_json_e_csv[filters7-ids7-counts7] | 0.232
+PASSOU | src.app.tests.test_dashboards::test_filtros_coerentes_no_resumo_json_e_csv[filters8-ids8-counts8] | 0.192
+PASSOU | src.app.tests.test_dashboards::test_filtros_coerentes_no_resumo_json_e_csv[filters9-ids9-counts9] | 0.225
+PASSOU | src.app.tests.test_dashboards::test_filtros_coerentes_no_resumo_json_e_csv[filters10-ids10-counts10] | 0.150
+PASSOU | src.app.tests.test_dashboards::test_filtros_coerentes_no_resumo_json_e_csv[filters11-ids11-counts11] | 0.150
+PASSOU | src.app.tests.test_dashboards::test_filtro_de_data_informa_fim_exclusivo_utc | 0.059
+PASSOU | src.app.tests.test_dashboards::test_relatorio_rejeita_filtros_invalidos_com_400_sem_gravar[params0] | 0.066
+PASSOU | src.app.tests.test_dashboards::test_relatorio_rejeita_filtros_invalidos_com_400_sem_gravar[params1] | 0.061
+PASSOU | src.app.tests.test_dashboards::test_relatorio_rejeita_filtros_invalidos_com_400_sem_gravar[params2] | 0.053
+PASSOU | src.app.tests.test_dashboards::test_relatorio_rejeita_filtros_invalidos_com_400_sem_gravar[params3] | 0.055
+PASSOU | src.app.tests.test_dashboards::test_relatorio_rejeita_filtros_invalidos_com_400_sem_gravar[params4] | 0.054
+PASSOU | src.app.tests.test_dashboards::test_relatorio_rejeita_filtros_invalidos_com_400_sem_gravar[params5] | 0.057
+PASSOU | src.app.tests.test_dashboards::test_relatorio_rejeita_filtros_invalidos_com_400_sem_gravar[params6] | 0.050
+PASSOU | src.app.tests.test_dashboards::test_relatorio_rejeita_filtros_invalidos_com_400_sem_gravar[params7] | 0.056
+PASSOU | src.app.tests.test_dashboards::test_relatorio_rejeita_filtros_invalidos_com_400_sem_gravar[params8] | 0.054
+PASSOU | src.app.tests.test_dashboards::test_relatorio_rejeita_filtros_invalidos_com_400_sem_gravar[params9] | 0.055
+PASSOU | src.app.tests.test_dashboards::test_relatorio_rejeita_filtros_invalidos_com_400_sem_gravar[params10] | 0.071
+PASSOU | src.app.tests.test_dashboards::test_relatorio_rejeita_filtros_invalidos_com_400_sem_gravar[params11] | 0.055
+PASSOU | src.app.tests.test_dashboards::test_relatorio_rejeita_filtros_invalidos_com_400_sem_gravar[params12] | 0.054
+PASSOU | src.app.tests.test_dashboards::test_relatorio_rejeita_filtros_invalidos_com_400_sem_gravar[params13] | 0.053
+PASSOU | src.app.tests.test_dashboards::test_relatorio_rejeita_filtros_invalidos_com_400_sem_gravar[params14] | 0.053
+PASSOU | src.app.tests.test_dashboards::test_relatorio_rejeita_filtros_invalidos_com_400_sem_gravar[params15] | 0.053
+PASSOU | src.app.tests.test_dashboards::test_relatorio_rejeita_filtros_invalidos_com_400_sem_gravar[params16] | 0.054
+PASSOU | src.app.tests.test_dashboards::test_relatorio_rejeita_filtros_invalidos_com_400_sem_gravar[params17] | 0.054
+PASSOU | src.app.tests.test_dashboards::test_relatorio_rejeita_filtros_invalidos_com_400_sem_gravar[params18] | 0.054
+PASSOU | src.app.tests.test_dashboards::test_relatorio_rejeita_filtros_invalidos_com_400_sem_gravar[params19] | 0.064
+PASSOU | src.app.tests.test_dashboards::test_relatorio_rejeita_filtros_invalidos_com_400_sem_gravar[params20] | 0.054
+PASSOU | src.app.tests.test_dashboards::test_relatorio_rejeita_filtros_invalidos_com_400_sem_gravar[params21] | 0.055
+PASSOU | src.app.tests.test_dashboards::test_relatorio_rejeita_filtros_invalidos_com_400_sem_gravar[params22] | 0.053
+PASSOU | src.app.tests.test_dashboards::test_relatorio_rejeita_filtros_invalidos_com_400_sem_gravar[params23] | 0.053
+PASSOU | src.app.tests.test_dashboards::test_relatorio_rejeita_filtros_invalidos_com_400_sem_gravar[params24] | 0.052
+PASSOU | src.app.tests.test_dashboards::test_relatorio_rejeita_filtros_invalidos_com_400_sem_gravar[params25] | 0.074
+PASSOU | src.app.tests.test_dashboards::test_relatorio_rejeita_filtros_invalidos_com_400_sem_gravar[params26] | 0.054
+PASSOU | src.app.tests.test_dashboards::test_relatorio_rejeita_filtros_invalidos_com_400_sem_gravar[params27] | 0.054
+PASSOU | src.app.tests.test_dashboards::test_relatorio_rejeita_filtros_invalidos_com_400_sem_gravar[params28] | 0.072
+PASSOU | src.app.tests.test_dashboards::test_validacao_dos_novos_endpoints_preserva_http_400[/api/dashboards/resumo] | 0.051
+PASSOU | src.app.tests.test_dashboards::test_validacao_dos_novos_endpoints_preserva_http_400[/api/relatorios/acessos] | 0.049
+PASSOU | src.app.tests.test_dashboards::test_validacao_dos_novos_endpoints_preserva_http_400[/api/relatorios/acessos.csv] | 0.053
+PASSOU | src.app.tests.test_dashboards::test_validacao_dos_novos_endpoints_preserva_http_400[/api/relatorios/atividades] | 0.052
+PASSOU | src.app.tests.test_dashboards::test_paginacao_estavel_e_pagina_vazia_preservam_total | 0.130
+PASSOU | src.app.tests.test_dashboards::test_nome_de_visitante_depende_do_vinculo_do_evento_e_nao_do_dono_atual_da_tag | 0.144
+PASSOU | src.app.tests.test_dashboards::test_registro_com_local_ausente_continua_no_relatorio | 0.086
+PASSOU | src.app.tests.test_dashboards::test_evolucao_informa_limite_sem_truncar_totais | 0.357
+PASSOU | src.app.tests.test_dashboards::test_ranking_limita_dez_salas_e_conta_somente_liberados | 0.119
+PASSOU | src.app.tests.test_dashboards::test_atividades_filtram_consultas_reais_sem_inferir_movimentacao[params0-ids0] | 0.165
+PASSOU | src.app.tests.test_dashboards::test_atividades_filtram_consultas_reais_sem_inferir_movimentacao[params1-ids1] | 0.134
+PASSOU | src.app.tests.test_dashboards::test_atividades_filtram_consultas_reais_sem_inferir_movimentacao[params2-ids2] | 0.126
+PASSOU | src.app.tests.test_dashboards::test_atividades_filtram_consultas_reais_sem_inferir_movimentacao[params3-ids3] | 0.133
+PASSOU | src.app.tests.test_dashboards::test_atividades_filtram_consultas_reais_sem_inferir_movimentacao[params4-ids4] | 0.147
+PASSOU | src.app.tests.test_dashboards::test_atividades_filtram_consultas_reais_sem_inferir_movimentacao[params5-ids5] | 0.132
+PASSOU | src.app.tests.test_dashboards::test_atividades_filtram_consultas_reais_sem_inferir_movimentacao[params6-ids6] | 0.116
+PASSOU | src.app.tests.test_dashboards::test_atividades_filtram_consultas_reais_sem_inferir_movimentacao[params7-ids7] | 0.114
+PASSOU | src.app.tests.test_dashboards::test_atividades_filtram_consultas_reais_sem_inferir_movimentacao[params8-ids8] | 0.120
+PASSOU | src.app.tests.test_dashboards::test_atividades_rejeitam_filtros_sem_significado_nessa_fonte[params0] | 0.063
+PASSOU | src.app.tests.test_dashboards::test_atividades_rejeitam_filtros_sem_significado_nessa_fonte[params1] | 0.073
+PASSOU | src.app.tests.test_dashboards::test_atividades_rejeitam_filtros_sem_significado_nessa_fonte[params2] | 0.053
+PASSOU | src.app.tests.test_dashboards::test_atividades_rejeitam_filtros_sem_significado_nessa_fonte[params3] | 0.061
+PASSOU | src.app.tests.test_dashboards::test_atividades_rejeitam_filtros_sem_significado_nessa_fonte[params4] | 0.052
+PASSOU | src.app.tests.test_dashboards::test_atividades_rejeitam_filtros_sem_significado_nessa_fonte[params5] | 0.067
+PASSOU | src.app.tests.test_dashboards::test_atividades_rejeitam_filtros_sem_significado_nessa_fonte[params6] | 0.113
+PASSOU | src.app.tests.test_dashboards::test_atividades_rejeitam_filtros_sem_significado_nessa_fonte[params7] | 0.073
+PASSOU | src.app.tests.test_dashboards::test_resumo_filtra_atividades_apenas_por_periodo | 0.172
+PASSOU | src.app.tests.test_dashboards::test_busca_original_de_objeto_aparece_como_consulta_no_resumo | 0.095
+PASSOU | src.app.tests.test_dashboards::test_leitura_http_com_mac_nao_vira_acesso_ou_retirada | 0.106
+PASSOU | src.app.tests.test_dashboards::test_eventos_da_porta_original_alimentam_resumo_e_vinculo_visitante | 0.150
+PASSOU | src.app.tests.test_dashboards::test_csv_neutraliza_formulas_sem_modificar_cadastro[=1+1] | 0.135
+PASSOU | src.app.tests.test_dashboards::test_csv_neutraliza_formulas_sem_modificar_cadastro[+1+1] | 0.132
+PASSOU | src.app.tests.test_dashboards::test_csv_neutraliza_formulas_sem_modificar_cadastro[-1+1] | 0.139
+PASSOU | src.app.tests.test_dashboards::test_csv_neutraliza_formulas_sem_modificar_cadastro[@SOMA(1)] | 0.143
+PASSOU | src.app.tests.test_dashboards::test_csv_neutraliza_formulas_sem_modificar_cadastro[  =1+1] | 0.073
+PASSOU | src.app.tests.test_dashboards::test_csv_neutraliza_formulas_sem_modificar_cadastro[\ttexto] | 0.070
+PASSOU | src.app.tests.test_dashboards::test_csv_neutraliza_formulas_sem_modificar_cadastro[\rtexto] | 0.069
+PASSOU | src.app.tests.test_dashboards::test_csv_neutraliza_formulas_sem_modificar_cadastro[\ntexto] | 0.070
+PASSOU | src.app.tests.test_dashboards::test_csv_preserva_acentos_separadores_e_quebras_de_linha | 0.067
+PASSOU | src.app.tests.test_dashboards::test_csv_exige_restringir_filtros_quando_ultrapassa_limite | 0.067
+PASSOU | src.app.tests.test_dashboards::test_consultas_administrativas_nao_inserem_eventos_ou_alteram_cadastros[/api/dashboards/resumo] | 0.084
+PASSOU | src.app.tests.test_dashboards::test_consultas_administrativas_nao_inserem_eventos_ou_alteram_cadastros[/api/relatorios/acessos] | 0.069
+PASSOU | src.app.tests.test_dashboards::test_consultas_administrativas_nao_inserem_eventos_ou_alteram_cadastros[/api/relatorios/acessos.csv] | 0.078
+PASSOU | src.app.tests.test_dashboards::test_consultas_administrativas_nao_inserem_eventos_ou_alteram_cadastros[/api/relatorios/atividades] | 0.071
+PASSOU | src.app.tests.test_dashboards::test_erro_sql_nos_novos_relatorios_e_generico_sem_expor_consulta[/api/dashboards/resumo-dashboard_summary] | 0.034
+PASSOU | src.app.tests.test_dashboards::test_erro_sql_nos_novos_relatorios_e_generico_sem_expor_consulta[/api/relatorios/acessos-access_query] | 0.030
+PASSOU | src.app.tests.test_dashboards::test_erro_sql_nos_novos_relatorios_e_generico_sem_expor_consulta[/api/relatorios/acessos.csv-access_query] | 0.029
+PASSOU | src.app.tests.test_dashboards::test_erro_sql_nos_novos_relatorios_e_generico_sem_expor_consulta[/api/relatorios/atividades-activity_query] | 0.029
+PASSOU | src.app.tests.test_frontend::test_template_preserva_modulos_e_oculta_novos_acessos_antes_do_login | 0.072
+PASSOU | src.app.tests.test_frontend::test_assets_da_interface_sao_servidos_pelo_flask_existente[admin.js-text/javascript] | 0.027
+PASSOU | src.app.tests.test_frontend::test_assets_da_interface_sao_servidos_pelo_flask_existente[admin.css-text/css] | 0.021
+PASSOU | src.app.tests.test_frontend::test_contratos_reais_disponiveis_para_o_frontend_sem_alterar_rotas | 0.136
+PASSOU | src.app.tests.test_http::test_pagina_inicial_preserva_template_e_javascript | 0.021
+FALHOU | src.app.tests.test_http::test_erros_http_preservam_status_original[get-/rota-inexistente-404] | 0.022
+FALHOU | src.app.tests.test_http::test_erros_http_preservam_status_original[get-/login-405] | 0.022
+FALHOU | src.app.tests.test_http::test_erros_de_parse_json_preservam_status[json_malformado] | 0.022
+FALHOU | src.app.tests.test_http::test_erros_de_parse_json_preservam_status[content_type_incorreto] | 0.021
+PASSOU | src.app.tests.test_http::test_excecao_inesperada_retorna_resposta_generica | 0.022
+PASSOU | src.app.tests.test_http::test_falha_de_banco_no_cadastro_retorna_500 | 0.137
+PASSOU | src.app.tests.test_http::test_logger_original_preserva_mensagem_e_arquivos_temporarios | 0.022
+PASSOU | src.app.tests.test_http::test_bootstrap_esta_isolado_em_memoria | 0.019
+PASSOU | src.app.tests.test_http::test_bloqueios_impedem_acesso_externo[sqlite] | 0.019
+PASSOU | src.app.tests.test_http::test_bloqueios_impedem_acesso_externo[sqlite_uri] | 0.019
+PASSOU | src.app.tests.test_http::test_bloqueios_impedem_acesso_externo[socket] | 0.019
+PASSOU | src.app.tests.test_http::test_bloqueios_impedem_acesso_externo[dns] | 0.019
+PASSOU | src.app.tests.test_http::test_bloqueios_impedem_acesso_externo[upload] | 0.019
+PASSOU | src.app.tests.test_inventory::test_cadastro_objeto_e_imagem_no_diretorio_temporario | 0.059
+PASSOU | src.app.tests.test_inventory::test_cadastro_objeto_rejeita_campos_obrigatorios_ausentes[nome] | 0.043
+PASSOU | src.app.tests.test_inventory::test_cadastro_objeto_rejeita_campos_obrigatorios_ausentes[descricao] | 0.043
+PASSOU | src.app.tests.test_inventory::test_cadastro_objeto_rejeita_campos_obrigatorios_ausentes[local] | 0.043
+PASSOU | src.app.tests.test_inventory::test_cadastro_objeto_rejeita_campos_obrigatorios_ausentes[uid_recebido] | 0.043
+PASSOU | src.app.tests.test_inventory::test_cadastro_objeto_rejeita_campos_obrigatorios_ausentes[imagem] | 0.032
+PASSOU | src.app.tests.test_inventory::test_cadastro_objeto_rejeita_referencias_inexistentes[changes0] | 0.044
+PASSOU | src.app.tests.test_inventory::test_cadastro_objeto_rejeita_referencias_inexistentes[changes1] | 0.046
+PASSOU | src.app.tests.test_inventory::test_nome_do_upload_e_sanitizado | 0.046
+PASSOU | src.app.tests.test_inventory::test_recadastro_objeto_rejeita_entradas_e_conflitos[payload0-400] | 0.032
+PASSOU | src.app.tests.test_inventory::test_recadastro_objeto_rejeita_entradas_e_conflitos[payload1-404] | 0.033
+PASSOU | src.app.tests.test_inventory::test_recadastro_objeto_rejeita_entradas_e_conflitos[payload2-404] | 0.033
+PASSOU | src.app.tests.test_inventory::test_recadastro_objeto_rejeita_entradas_e_conflitos[payload3-400] | 0.033
+PASSOU | src.app.tests.test_inventory::test_recadastro_objeto_atualiza_uid | 0.038
+PASSOU | src.app.tests.test_inventory::test_exclusao_objeto[payload0-400-1] | 0.032
+PASSOU | src.app.tests.test_inventory::test_exclusao_objeto[payload1-404-1] | 0.033
+PASSOU | src.app.tests.test_inventory::test_exclusao_objeto[payload2-200-0] | 0.034
+PASSOU | src.app.tests.test_inventory::test_inventario_disponivel_aos_perfis_existentes[root] | 0.032
+PASSOU | src.app.tests.test_inventory::test_inventario_disponivel_aos_perfis_existentes[user] | 0.032
+PASSOU | src.app.tests.test_inventory::test_inventario_exige_jwt | 0.020
+PASSOU | src.app.tests.test_inventory::test_consultas_publicas_preservam_historico[/buscar_objeto_id/1-200-buscar_objeto_id-sucesso] | 0.032
+PASSOU | src.app.tests.test_inventory::test_consultas_publicas_preservam_historico[/buscar_objeto_id/999-404-buscar_objeto_id-falha] | 0.031
+PASSOU | src.app.tests.test_inventory::test_consultas_publicas_preservam_historico[/buscar_objeto_uid/a1b2c3d4-200-buscar_objeto_uid-sucesso] | 0.032
+PASSOU | src.app.tests.test_inventory::test_consultas_publicas_preservam_historico[/buscar_objeto_uid/inexistente-404-buscar_objeto_uid-falha] | 0.030
+PASSOU | src.app.tests.test_inventory::test_busca_objeto_por_nome[Notebook-200] | 0.030
+PASSOU | src.app.tests.test_inventory::test_busca_objeto_por_nome[book-200] | 0.029
+PASSOU | src.app.tests.test_inventory::test_busca_objeto_por_nome[INEXISTENTE-404] | 0.029
+PASSOU | src.app.tests.test_inventory::test_cadastro_e_edicao_de_local | 0.042
+PASSOU | src.app.tests.test_inventory::test_locais_rejeitam_corpo_vazio_ou_id_inexistente[post-/cadastrar_local-payload0-400] | 0.037
+PASSOU | src.app.tests.test_inventory::test_locais_rejeitam_corpo_vazio_ou_id_inexistente[put-/editar_local-payload1-400] | 0.032
+PASSOU | src.app.tests.test_inventory::test_locais_rejeitam_corpo_vazio_ou_id_inexistente[put-/editar_local-payload2-404] | 0.032
+FALHOU | src.app.tests.test_inventory::test_local_incompleto_deve_ser_rejeitado_com_400[endereco] | 0.028
+FALHOU | src.app.tests.test_inventory::test_local_incompleto_deve_ser_rejeitado_com_400[descricao] | 0.029
+FALHOU | src.app.tests.test_inventory::test_local_incompleto_deve_ser_rejeitado_com_400[responsavel] | 0.028
+PASSOU | src.app.tests.test_inventory::test_listagem_publica_de_locais | 0.027
+PASSOU | src.app.tests.test_inventory::test_cadastro_esp32_preserva_mac_e_local_sem_token | 0.030
+PASSOU | src.app.tests.test_inventory::test_cadastro_esp32_rejeita_campos_ausentes[payload0] | 0.026
+PASSOU | src.app.tests.test_inventory::test_cadastro_esp32_rejeita_campos_ausentes[payload1] | 0.021
+PASSOU | src.app.tests.test_inventory::test_cadastro_esp32_rejeita_campos_ausentes[payload2] | 0.021
+PASSOU | src.app.tests.test_inventory::test_esp32_duplicado_nao_persiste_novamente | 0.030
+PASSOU | src.app.tests.test_inventory::test_leitura_http_autorizada_apenas_por_mac_cadastrado[d4e5f6a7-livre] | 0.035
+PASSOU | src.app.tests.test_inventory::test_leitura_http_autorizada_apenas_por_mac_cadastrado[a1b2c3d4-objeto] | 0.032
+PASSOU | src.app.tests.test_inventory::test_leitura_http_autorizada_apenas_por_mac_cadastrado[c3d4e5f6-usuario] | 0.032
+PASSOU | src.app.tests.test_inventory::test_mac_nao_cadastrado_nao_autoriza_leitura[AA:BB:CC:DD:EE:99] | 0.029
+PASSOU | src.app.tests.test_inventory::test_mac_nao_cadastrado_nao_autoriza_leitura[] | 0.029
+PASSOU | src.app.tests.test_inventory::test_mac_nao_cadastrado_nao_autoriza_leitura[None] | 0.030
+PASSOU | src.app.tests.test_inventory::test_leitura_idempotente_nao_duplica_tag | 0.039
+PASSOU | src.app.tests.test_inventory::test_evento_socketio_real_em_processo_apos_leitura | 0.032
+PASSOU | src.app.tests.test_inventory::test_rfid_corpo_vazio_retorna_400 | 0.020
+PASSOU | src.app.tests.test_inventory::test_listagem_rfid_publica_preserva_campos | 0.032
+PASSOU | src.app.tests.test_inventory::test_consulta_rfid_por_uid[a1b2c3d4-200] | 0.028
+PASSOU | src.app.tests.test_inventory::test_consulta_rfid_por_uid[inexistente-400] | 0.028
+PASSOU | src.app.tests.test_inventory::test_exclusao_de_tag_livre_e_bloqueio_de_objeto[payload0-400-3] | 0.033
+PASSOU | src.app.tests.test_inventory::test_exclusao_de_tag_livre_e_bloqueio_de_objeto[payload1-404-3] | 0.034
+PASSOU | src.app.tests.test_inventory::test_exclusao_de_tag_livre_e_bloqueio_de_objeto[payload2-400-3] | 0.034
+PASSOU | src.app.tests.test_inventory::test_exclusao_de_tag_livre_e_bloqueio_de_objeto[payload3-200-2] | 0.035
+PASSOU | src.app.tests.test_inventory::test_falha_de_commit_nao_persiste_operacao[post-/cadastrar_local-payload0] | 0.035
+PASSOU | src.app.tests.test_inventory::test_falha_de_commit_nao_persiste_operacao[put-/editar_local-payload1] | 0.036
+PASSOU | src.app.tests.test_inventory::test_falha_de_commit_nao_persiste_operacao[post-/cadastrar_esp32-payload2] | 0.034
+PASSOU | src.app.tests.test_inventory::test_falha_de_commit_nao_persiste_operacao[post-/atribuir_rfid_usuario-payload3] | 0.044
+PASSOU | src.app.tests.test_inventory::test_falha_de_commit_nao_persiste_operacao[put-/recadastrar_objeto-payload4] | 0.038
+PASSOU | src.app.tests.test_inventory::test_falha_de_commit_nao_persiste_operacao[delete-/excluir_objeto-payload5] | 0.036
+PASSOU | src.app.tests.test_inventory::test_falha_de_commit_nao_persiste_operacao[delete-/excluir_rfid-payload6] | 0.036
+PASSOU | src.app.tests.test_models::test_restricoes_declaradas_no_schema[email_unico] | 0.063
+PASSOU | src.app.tests.test_models::test_restricoes_declaradas_no_schema[email_obrigatorio] | 0.060
+PASSOU | src.app.tests.test_models::test_restricoes_declaradas_no_schema[senha_obrigatoria] | 0.059
+PASSOU | src.app.tests.test_models::test_restricoes_declaradas_no_schema[credencial_unica] | 0.058
+PASSOU | src.app.tests.test_models::test_restricoes_declaradas_no_schema[credencial_fk] | 0.059
+PASSOU | src.app.tests.test_models::test_restricoes_declaradas_no_schema[uid_unica] | 0.057
+PASSOU | src.app.tests.test_models::test_restricoes_declaradas_no_schema[data_obrigatoria] | 0.057
+PASSOU | src.app.tests.test_models::test_restricoes_declaradas_no_schema[objeto_tag_unica] | 0.057
+PASSOU | src.app.tests.test_models::test_restricoes_declaradas_no_schema[objeto_tag_fk] | 0.058
+PASSOU | src.app.tests.test_models::test_restricoes_declaradas_no_schema[objeto_local_fk] | 0.057
+PASSOU | src.app.tests.test_models::test_restricoes_declaradas_no_schema[mac_unico] | 0.057
+PASSOU | src.app.tests.test_models::test_restricoes_declaradas_no_schema[dispositivo_local_fk] | 0.057
+PASSOU | src.app.tests.test_models::test_restricoes_declaradas_no_schema[root_usuario_fk] | 0.058
+PASSOU | src.app.tests.test_models::test_restricoes_declaradas_no_schema[root_senha_obrigatoria] | 0.058
+PASSOU | src.app.tests.test_models::test_restricoes_declaradas_no_schema[acesso_tag_fk] | 0.063
+PASSOU | src.app.tests.test_models::test_restricoes_declaradas_no_schema[acesso_local_fk] | 0.059
+PASSOU | src.app.tests.test_models::test_restricoes_declaradas_no_schema[historico_objeto_fk] | 0.059
+PASSOU | src.app.tests.test_models::test_restricoes_declaradas_no_schema[historico_usuario_fk] | 0.058
+PASSOU | src.app.tests.test_models::test_referencias_opcionais_de_historico_aceitam_null | 0.062
+PASSOU | src.app.tests.test_models::test_hierarquia_user_root_e_relacionamento_local | 0.028
+PASSOU | src.app.tests.test_models::test_schema_original_com_as_extensoes_de_visitantes_e_permissoes_aprovadas | 0.018
+PASSOU | src.app.tests.test_models::test_verificacao_fk_dos_modelos_nao_reconfigura_engine_da_api | 0.056
+PASSOU | src.app.tests.test_models::test_integridade_da_permissao_individual[pessoa_ausente] | 0.058
+PASSOU | src.app.tests.test_models::test_integridade_da_permissao_individual[local_ausente] | 0.057
+PASSOU | src.app.tests.test_models::test_integridade_da_permissao_individual[duplicada] | 0.058
+PASSOU | src.app.tests.test_models::test_integridade_da_permissao_individual[periodo_igual] | 0.057
+PASSOU | src.app.tests.test_models::test_integridade_da_permissao_individual[periodo_invertido] | 0.060
+PASSOU | src.app.tests.test_models::test_integridade_da_permissao_individual[revogada_nula] | 0.056
+PASSOU | src.app.tests.test_models::test_integridade_da_permissao_individual[revogada_fora_do_dominio] | 0.056
+PASSOU | src.app.tests.test_models::test_backfill_explicito_preserva_legado_e_nao_reaplica_limites_globais | 0.065
+PASSOU | src.app.tests.test_models::test_backfill_nao_reativa_ou_sobrescreve_permissao_existente | 0.063
+PASSOU | src.app.tests.test_models::test_backfill_nao_faz_commit_e_pode_ser_revertido_pelo_chamador | 0.064
+PASSOU | src.app.tests.test_models::test_restricoes_das_tres_tabelas_de_visitante[visitante_sem_user] | 0.067
+PASSOU | src.app.tests.test_models::test_restricoes_das_tres_tabelas_de_visitante[inicio_nulo] | 0.064
+PASSOU | src.app.tests.test_models::test_restricoes_das_tres_tabelas_de_visitante[periodo_invertido] | 0.064
+PASSOU | src.app.tests.test_models::test_restricoes_das_tres_tabelas_de_visitante[periodo_igual] | 0.064
+PASSOU | src.app.tests.test_models::test_restricoes_das_tres_tabelas_de_visitante[local_inexistente] | 0.063
+PASSOU | src.app.tests.test_models::test_restricoes_das_tres_tabelas_de_visitante[user_nao_visitante] | 0.062
+PASSOU | src.app.tests.test_models::test_restricoes_das_tres_tabelas_de_visitante[local_duplicado] | 0.062
+PASSOU | src.app.tests.test_models::test_restricoes_das_tres_tabelas_de_visitante[registro_inexistente] | 0.063
+PASSOU | src.app.tests.test_models::test_restricoes_das_tres_tabelas_de_visitante[historico_user_nao_visitante] | 0.063
+PASSOU | src.app.tests.test_models::test_restricoes_das_tres_tabelas_de_visitante[registro_duplicado] | 0.063
+PASSOU | src.app.tests.test_mqtt::test_configuracao_original_de_broker_topicos_e_rota | 0.024
+PASSOU | src.app.tests.test_mqtt::test_conexao_assina_topico_original | 0.019
+PASSOU | src.app.tests.test_mqtt::test_mensagem_encaminha_json_original_sem_token_ou_cabecalho_novo[200-200] | 0.021
+PASSOU | src.app.tests.test_mqtt::test_mensagem_encaminha_json_original_sem_token_ou_cabecalho_novo[201-200] | 0.020
+PASSOU | src.app.tests.test_mqtt::test_mensagem_encaminha_json_original_sem_token_ou_cabecalho_novo[400-401] | 0.020
+PASSOU | src.app.tests.test_mqtt::test_mensagem_encaminha_json_original_sem_token_ou_cabecalho_novo[401-401] | 0.022
+PASSOU | src.app.tests.test_mqtt::test_mensagem_encaminha_json_original_sem_token_ou_cabecalho_novo[403-401] | 0.020
+PASSOU | src.app.tests.test_mqtt::test_mensagem_encaminha_json_original_sem_token_ou_cabecalho_novo[404-401] | 0.020
+PASSOU | src.app.tests.test_mqtt::test_mensagem_encaminha_json_original_sem_token_ou_cabecalho_novo[500-401] | 0.020
+PASSOU | src.app.tests.test_mqtt::test_topico_alheio_nao_encaminha_mensagem | 0.020
+PASSOU | src.app.tests.test_mqtt::test_json_malformado_publica_erro_original[{] | 0.020
+PASSOU | src.app.tests.test_mqtt::test_json_malformado_publica_erro_original[nao-e-json] | 0.020
+PASSOU | src.app.tests.test_mqtt::test_json_malformado_publica_erro_original[] | 0.020
+PASSOU | src.app.tests.test_mqtt::test_falhas_de_rede_publicam_500_com_mocks[ConnectionError] | 0.020
+PASSOU | src.app.tests.test_mqtt::test_falhas_de_rede_publicam_500_com_mocks[Timeout] | 0.020
+PASSOU | src.app.tests.test_mqtt::test_falhas_de_rede_publicam_500_com_mocks[RequestException] | 0.020
+PASSOU | src.app.tests.test_mqtt::test_campos_ausentes_continuam_encaminhados_sem_traducao_automatica | 0.025
+PASSOU | src.app.tests.test_mqtt::test_limite_atual_utf8_invalido_nao_tem_tratamento | 0.021
+PASSOU | src.app.tests.test_mqtt::test_limite_atual_json_lista_nao_tem_tratamento | 0.024
+PASSOU | src.app.tests.test_mqtt::test_resposta_mqtt_preserva_topico_e_codigo_textual[200] | 0.019
+PASSOU | src.app.tests.test_mqtt::test_resposta_mqtt_preserva_topico_e_codigo_textual[401] | 0.020
+PASSOU | src.app.tests.test_mqtt::test_resposta_mqtt_preserva_topico_e_codigo_textual[500] | 0.019
+PASSOU | src.app.tests.test_mqtt::test_erro_na_publicacao_e_registrado_sem_escapar | 0.020
+PASSOU | src.app.tests.test_mqtt::test_cliente_inicia_callbacks_e_loop_originais | 0.020
+PASSOU | src.app.tests.test_mqtt::test_cliente_trata_falha_de_conexao | 0.020
+PASSOU | src.app.tests.test_mqtt::test_interrupcao_desconecta_cliente | 0.020
+PASSOU | src.app.tests.test_permissions::test_permissoes_administrativas_exigem_root[None-401-person-get] | 0.038
+PASSOU | src.app.tests.test_permissions::test_permissoes_administrativas_exigem_root[None-401-grant-put] | 0.038
+PASSOU | src.app.tests.test_permissions::test_permissoes_administrativas_exigem_root[None-401-revoke-post] | 0.038
+PASSOU | src.app.tests.test_permissions::test_permissoes_administrativas_exigem_root[None-401-local-get] | 0.036
+PASSOU | src.app.tests.test_permissions::test_permissoes_administrativas_exigem_root[user-403-person-get] | 0.038
+PASSOU | src.app.tests.test_permissions::test_permissoes_administrativas_exigem_root[user-403-grant-put] | 0.038
+PASSOU | src.app.tests.test_permissions::test_permissoes_administrativas_exigem_root[user-403-revoke-post] | 0.038
+PASSOU | src.app.tests.test_permissions::test_permissoes_administrativas_exigem_root[user-403-local-get] | 0.038
+PASSOU | src.app.tests.test_permissions::test_permissoes_administrativas_exigem_root[visitante-403-person-get] | 0.039
+PASSOU | src.app.tests.test_permissions::test_permissoes_administrativas_exigem_root[visitante-403-grant-put] | 0.039
+PASSOU | src.app.tests.test_permissions::test_permissoes_administrativas_exigem_root[visitante-403-revoke-post] | 0.039
+PASSOU | src.app.tests.test_permissions::test_permissoes_administrativas_exigem_root[visitante-403-local-get] | 0.039
+PASSOU | src.app.tests.test_permissions::test_root_concede_atualiza_e_consulta_sem_alterar_pessoa_ou_expor_segredos | 0.066
+PASSOU | src.app.tests.test_permissions::test_permissao_invalida_nao_e_gravada[body0] | 0.034
+PASSOU | src.app.tests.test_permissions::test_permissao_invalida_nao_e_gravada[body1] | 0.034
+PASSOU | src.app.tests.test_permissions::test_permissao_invalida_nao_e_gravada[body2] | 0.034
+PASSOU | src.app.tests.test_permissions::test_permissao_invalida_nao_e_gravada[body3] | 0.034
+PASSOU | src.app.tests.test_permissions::test_permissao_invalida_nao_e_gravada[body4] | 0.034
+PASSOU | src.app.tests.test_permissions::test_permissao_invalida_nao_e_gravada[body5] | 0.034
+PASSOU | src.app.tests.test_permissions::test_permissao_invalida_nao_e_gravada[body6] | 0.034
+PASSOU | src.app.tests.test_permissions::test_permissao_invalida_nao_e_gravada[body7] | 0.034
+PASSOU | src.app.tests.test_permissions::test_permissao_invalida_nao_e_gravada[body8] | 0.035
+PASSOU | src.app.tests.test_permissions::test_permissao_invalida_nao_e_gravada[body9] | 0.040
+PASSOU | src.app.tests.test_permissions::test_permissao_invalida_nao_e_gravada[body10] | 0.034
+PASSOU | src.app.tests.test_permissions::test_permissao_invalida_nao_e_gravada[body11] | 0.033
+PASSOU | src.app.tests.test_permissions::test_permissao_invalida_nao_e_gravada[body12] | 0.033
+PASSOU | src.app.tests.test_permissions::test_permissao_invalida_nao_e_gravada[body13] | 0.033
+PASSOU | src.app.tests.test_permissions::test_permissao_invalida_nao_e_gravada[body14] | 0.033
+PASSOU | src.app.tests.test_permissions::test_permissao_invalida_nao_e_gravada[body15] | 0.035
+PASSOU | src.app.tests.test_permissions::test_permissao_invalida_nao_e_gravada[None] | 0.033
+PASSOU | src.app.tests.test_permissions::test_json_invalido_das_rotas_novas_preserva_400[{-application/json] | 0.033
+PASSOU | src.app.tests.test_permissions::test_json_invalido_das_rotas_novas_preserva_400[texto-text/plain] | 0.032
+PASSOU | src.app.tests.test_permissions::test_json_invalido_das_rotas_novas_preserva_400[null-application/json] | 0.032
+PASSOU | src.app.tests.test_permissions::test_ids_inexistentes_nao_criam_permissao[99999-1] | 0.033
+PASSOU | src.app.tests.test_permissions::test_ids_inexistentes_nao_criam_permissao[2-99999] | 0.034
+PASSOU | src.app.tests.test_permissions::test_nenhum_perfil_tem_acesso_universal_sem_permissao[user] | 0.033
+PASSOU | src.app.tests.test_permissions::test_nenhum_perfil_tem_acesso_universal_sem_permissao[root] | 0.038
+PASSOU | src.app.tests.test_permissions::test_duas_pessoas_multiplas_salas_e_permissoes_diferentes | 0.070
+PASSOU | src.app.tests.test_permissions::test_condicoes_de_negacao_nunca_abrem_a_porta[agendada] | 0.036
+PASSOU | src.app.tests.test_permissions::test_condicoes_de_negacao_nunca_abrem_a_porta[expirada] | 0.036
+PASSOU | src.app.tests.test_permissions::test_condicoes_de_negacao_nunca_abrem_a_porta[revogada] | 0.036
+PASSOU | src.app.tests.test_permissions::test_condicoes_de_negacao_nunca_abrem_a_porta[inativo] | 0.037
+PASSOU | src.app.tests.test_permissions::test_condicoes_de_negacao_nunca_abrem_a_porta[uid_ausente] | 0.034
+PASSOU | src.app.tests.test_permissions::test_condicoes_de_negacao_nunca_abrem_a_porta[uid_vazia] | 0.033
+PASSOU | src.app.tests.test_permissions::test_condicoes_de_negacao_nunca_abrem_a_porta[sem_pessoa] | 0.035
+PASSOU | src.app.tests.test_permissions::test_condicoes_de_negacao_nunca_abrem_a_porta[tag_inexistente] | 0.036
+PASSOU | src.app.tests.test_permissions::test_inicio_inclusivo_e_fim_exclusivo_da_permissao[-1-agendada] | 0.031
+PASSOU | src.app.tests.test_permissions::test_inicio_inclusivo_e_fim_exclusivo_da_permissao[0-vigente] | 0.031
+PASSOU | src.app.tests.test_permissions::test_inicio_inclusivo_e_fim_exclusivo_da_permissao[3599-vigente] | 0.030
+PASSOU | src.app.tests.test_permissions::test_inicio_inclusivo_e_fim_exclusivo_da_permissao[3600-expirada] | 0.030
+PASSOU | src.app.tests.test_permissions::test_visitante_usa_intersecao_de_validade_global_e_por_local | 0.072
+PASSOU | src.app.tests.test_permissions::test_revogar_sala_nao_exclui_pessoa_ou_outras_permissoes | 0.077
+PASSOU | src.app.tests.test_permissions::test_lista_local_distingue_permissao_vigente_de_acesso_efetivo | 0.080
+PASSOU | src.app.tests.test_permissions::test_filtro_por_situacao_individual[agendada-values0] | 0.047
+PASSOU | src.app.tests.test_permissions::test_filtro_por_situacao_individual[expirada-values1] | 0.044
+PASSOU | src.app.tests.test_permissions::test_filtro_por_situacao_individual[revogada-values2] | 0.043
+PASSOU | src.app.tests.test_permissions::test_filtros_administrativos_invalidos_retornam_400[pagina=0] | 0.032
+PASSOU | src.app.tests.test_permissions::test_filtros_administrativos_invalidos_retornam_400[limite=0] | 0.033
+PASSOU | src.app.tests.test_permissions::test_filtros_administrativos_invalidos_retornam_400[limite=101] | 0.032
+PASSOU | src.app.tests.test_permissions::test_filtros_administrativos_invalidos_retornam_400[pagina=abc] | 0.032
+PASSOU | src.app.tests.test_permissions::test_filtros_administrativos_invalidos_retornam_400[pagina=9999999999999999999999999] | 0.032
+PASSOU | src.app.tests.test_permissions::test_filtros_administrativos_invalidos_retornam_400[pagina=9223372036854775807&limite=100] | 0.032
+PASSOU | src.app.tests.test_permissions::test_filtros_administrativos_invalidos_retornam_400[situacao=invalida] | 0.032
+PASSOU | src.app.tests.test_permissions::test_filtros_administrativos_invalidos_retornam_400[situacao=] | 0.032
+PASSOU | src.app.tests.test_permissions::test_filtros_administrativos_invalidos_retornam_400[nome=x] | 0.032
+PASSOU | src.app.tests.test_permissions::test_filtros_administrativos_invalidos_retornam_400[pagina=1&pagina=2] | 0.032
+PASSOU | src.app.tests.test_permissions::test_paginacao_pessoa_e_local_preserva_total | 0.047
+PASSOU | src.app.tests.test_permissions::test_edicao_visitante_preserva_metadados_e_nao_reativa_sala_revogada | 0.064
+PASSOU | src.app.tests.test_permissions::test_legado_nao_e_fallback_que_reautoriza_permissa_revogada | 0.042
+PASSOU | src.app.tests.test_permissions::test_troca_de_tag_nao_transfere_permissoes_para_novo_dono | 0.049
+PASSOU | src.app.tests.test_permissions::test_falha_na_gravacao_reverte_a_permissao_sem_expor_sql[error0-500] | 0.035
+PASSOU | src.app.tests.test_permissions::test_falha_na_gravacao_reverte_a_permissao_sem_expor_sql[error1-409] | 0.035
+PASSOU | src.app.tests.test_permissions::test_falha_na_consulta_da_porta_nao_abre_por_padrao | 0.031
+PASSOU | src.app.tests.test_permissions::test_mac_permanece_no_fluxo_rfid_e_nao_vira_campo_obrigatorio_na_porta | 0.053
+PASSOU | src.app.tests.test_permissions::test_uid_numerica_e_credencial_herdada_continuam_consultaveis | 0.047
+PASSOU | src.app.tests.test_permissions::test_validade_da_permissao_e_reavaliada_em_cada_tentativa | 0.040
+PASSOU | src.app.tests.test_permissions::test_falha_sql_administrativa_e_tratada_sem_detalhes_internos[person] | 0.032
+PASSOU | src.app.tests.test_permissions::test_falha_sql_administrativa_e_tratada_sem_detalhes_internos[local] | 0.032
+PASSOU | src.app.tests.test_permissions::test_falha_sql_administrativa_e_tratada_sem_detalhes_internos[revoke] | 0.034
+PASSOU | src.app.tests.test_permissions::test_default_por_local_exclui_credenciais_ausentes_e_preserva_consulta_todas | 0.054
+PASSOU | src.app.tests.test_permissions::test_revogacao_ou_edicao_falha_nao_perde_autorizacao_antes_valida | 0.093
+PASSOU | src.app.tests.test_permissions::test_tag_ja_vinculada_continua_rejeitada_pela_associacao_original | 0.045
+PASSOU | src.app.tests.test_permissions::test_paginacao_de_autorizados_por_local_e_estado_individual | 0.046
+PASSOU | src.app.tests.test_permissions_frontend::test_assets_de_permissoes_no_flask_original[permissions.js-text/javascript] | 0.021
+PASSOU | src.app.tests.test_permissions_frontend::test_assets_de_permissoes_no_flask_original[permissions.css-text/css] | 0.021
+PASSOU | src.app.tests.test_permissions_frontend::test_amostras_reais_de_pessoas_locais_e_escrita_para_dom | 0.137
+PASSOU | src.app.tests.test_visitors::test_administracao_de_visitantes_exige_root[None-401-post-/visitantes] | 0.038
+PASSOU | src.app.tests.test_visitors::test_administracao_de_visitantes_exige_root[None-401-get-/visitantes] | 0.037
+PASSOU | src.app.tests.test_visitors::test_administracao_de_visitantes_exige_root[None-401-get-/visitantes/999] | 0.037
+PASSOU | src.app.tests.test_visitors::test_administracao_de_visitantes_exige_root[None-401-put-/visitantes/999] | 0.037
+PASSOU | src.app.tests.test_visitors::test_administracao_de_visitantes_exige_root[None-401-post-/visitantes/999/revogar] | 0.037
+PASSOU | src.app.tests.test_visitors::test_administracao_de_visitantes_exige_root[None-401-get-/visitantes/999/acessos] | 0.037
+PASSOU | src.app.tests.test_visitors::test_administracao_de_visitantes_exige_root[user-403-post-/visitantes] | 0.039
+PASSOU | src.app.tests.test_visitors::test_administracao_de_visitantes_exige_root[user-403-get-/visitantes] | 0.038
+PASSOU | src.app.tests.test_visitors::test_administracao_de_visitantes_exige_root[user-403-get-/visitantes/999] | 0.039
+PASSOU | src.app.tests.test_visitors::test_administracao_de_visitantes_exige_root[user-403-put-/visitantes/999] | 0.045
+PASSOU | src.app.tests.test_visitors::test_administracao_de_visitantes_exige_root[user-403-post-/visitantes/999/revogar] | 0.039
+PASSOU | src.app.tests.test_visitors::test_administracao_de_visitantes_exige_root[user-403-get-/visitantes/999/acessos] | 0.039
+PASSOU | src.app.tests.test_visitors::test_administracao_de_visitantes_exige_root[visitante-403-post-/visitantes] | 0.039
+PASSOU | src.app.tests.test_visitors::test_administracao_de_visitantes_exige_root[visitante-403-get-/visitantes] | 0.038
+PASSOU | src.app.tests.test_visitors::test_administracao_de_visitantes_exige_root[visitante-403-get-/visitantes/999] | 0.041
+PASSOU | src.app.tests.test_visitors::test_administracao_de_visitantes_exige_root[visitante-403-put-/visitantes/999] | 0.039
+PASSOU | src.app.tests.test_visitors::test_administracao_de_visitantes_exige_root[visitante-403-post-/visitantes/999/revogar] | 0.039
+PASSOU | src.app.tests.test_visitors::test_administracao_de_visitantes_exige_root[visitante-403-get-/visitantes/999/acessos] | 0.038
+PASSOU | src.app.tests.test_visitors::test_visitante_nao_recebe_permissoes_root_existentes[post-/registrar_root] | 0.037
+PASSOU | src.app.tests.test_visitors::test_visitante_nao_recebe_permissoes_root_existentes[post-/atribuir_rfid_usuario] | 0.036
+PASSOU | src.app.tests.test_visitors::test_visitante_nao_recebe_permissoes_root_existentes[get-/visualizar_todos_usuarios] | 0.036
+PASSOU | src.app.tests.test_visitors::test_visitante_nao_recebe_permissoes_root_existentes[post-/cadastrar_objeto] | 0.036
+PASSOU | src.app.tests.test_visitors::test_visitante_nao_recebe_permissoes_root_existentes[put-/recadastrar_objeto] | 0.037
+PASSOU | src.app.tests.test_visitors::test_visitante_nao_recebe_permissoes_root_existentes[delete-/excluir_objeto] | 0.036
+PASSOU | src.app.tests.test_visitors::test_visitante_nao_recebe_permissoes_root_existentes[post-/cadastrar_local] | 0.036
+PASSOU | src.app.tests.test_visitors::test_visitante_nao_recebe_permissoes_root_existentes[put-/editar_local] | 0.036
+PASSOU | src.app.tests.test_visitors::test_visitante_nao_recebe_permissoes_root_existentes[delete-/excluir_rfid] | 0.037
+PASSOU | src.app.tests.test_visitors::test_cadastro_visitante_reutiliza_user_sem_expor_senha | 0.275
+PASSOU | src.app.tests.test_visitors::test_cadastro_visitante_rejeita_campos_ausentes[nome] | 0.038
+PASSOU | src.app.tests.test_visitors::test_cadastro_visitante_rejeita_campos_ausentes[email] | 0.039
+PASSOU | src.app.tests.test_visitors::test_cadastro_visitante_rejeita_campos_ausentes[senha] | 0.039
+PASSOU | src.app.tests.test_visitors::test_cadastro_visitante_rejeita_campos_ausentes[credencial_rfid] | 0.036
+PASSOU | src.app.tests.test_visitors::test_cadastro_visitante_rejeita_campos_ausentes[inicio] | 0.036
+PASSOU | src.app.tests.test_visitors::test_cadastro_visitante_rejeita_campos_ausentes[expiracao] | 0.050
+PASSOU | src.app.tests.test_visitors::test_cadastro_visitante_rejeita_campos_ausentes[locais] | 0.065
+PASSOU | src.app.tests.test_visitors::test_cadastro_visitante_valida_novos_campos_sem_persistencia_parcial[changes0-400] | 0.038
+PASSOU | src.app.tests.test_visitors::test_cadastro_visitante_valida_novos_campos_sem_persistencia_parcial[changes1-400] | 0.037
+PASSOU | src.app.tests.test_visitors::test_cadastro_visitante_valida_novos_campos_sem_persistencia_parcial[changes2-400] | 0.034
+PASSOU | src.app.tests.test_visitors::test_cadastro_visitante_valida_novos_campos_sem_persistencia_parcial[changes3-400] | 0.035
+PASSOU | src.app.tests.test_visitors::test_cadastro_visitante_valida_novos_campos_sem_persistencia_parcial[changes4-400] | 0.035
+PASSOU | src.app.tests.test_visitors::test_cadastro_visitante_valida_novos_campos_sem_persistencia_parcial[changes5-400] | 0.035
+PASSOU | src.app.tests.test_visitors::test_cadastro_visitante_valida_novos_campos_sem_persistencia_parcial[changes6-400] | 0.034
+PASSOU | src.app.tests.test_visitors::test_cadastro_visitante_valida_novos_campos_sem_persistencia_parcial[changes7-400] | 0.035
+PASSOU | src.app.tests.test_visitors::test_cadastro_visitante_valida_novos_campos_sem_persistencia_parcial[changes8-400] | 0.035
+PASSOU | src.app.tests.test_visitors::test_cadastro_visitante_valida_novos_campos_sem_persistencia_parcial[changes9-400] | 0.035
+PASSOU | src.app.tests.test_visitors::test_cadastro_visitante_valida_novos_campos_sem_persistencia_parcial[changes10-404] | 0.036
+PASSOU | src.app.tests.test_visitors::test_cadastro_visitante_valida_novos_campos_sem_persistencia_parcial[changes11-409] | 0.037
+PASSOU | src.app.tests.test_visitors::test_cadastro_visitante_valida_novos_campos_sem_persistencia_parcial[changes12-409] | 0.037
+PASSOU | src.app.tests.test_visitors::test_cadastro_visitante_valida_novos_campos_sem_persistencia_parcial[changes13-409] | 0.035
+PASSOU | src.app.tests.test_visitors::test_cadastro_visitante_valida_novos_campos_sem_persistencia_parcial[changes14-400] | 0.036
+PASSOU | src.app.tests.test_visitors::test_cadastro_visitante_valida_novos_campos_sem_persistencia_parcial[changes15-400] | 0.037
+PASSOU | src.app.tests.test_visitors::test_cadastro_visitante_valida_novos_campos_sem_persistencia_parcial[changes16-400] | 0.037
+PASSOU | src.app.tests.test_visitors::test_cadastro_visitante_valida_novos_campos_sem_persistencia_parcial[changes17-400] | 0.036
+PASSOU | src.app.tests.test_visitors::test_cadastro_visitante_valida_novos_campos_sem_persistencia_parcial[changes18-400] | 0.036
+PASSOU | src.app.tests.test_visitors::test_cadastro_visitante_valida_novos_campos_sem_persistencia_parcial[changes19-400] | 0.036
+PASSOU | src.app.tests.test_visitors::test_cadastro_visitante_valida_novos_campos_sem_persistencia_parcial[changes20-400] | 0.043
+PASSOU | src.app.tests.test_visitors::test_cadastro_visitante_valida_novos_campos_sem_persistencia_parcial[changes21-400] | 0.036
+PASSOU | src.app.tests.test_visitors::test_cadastro_visitante_valida_novos_campos_sem_persistencia_parcial[changes22-400] | 0.036
+PASSOU | src.app.tests.test_visitors::test_cadastro_visitante_valida_novos_campos_sem_persistencia_parcial[changes23-400] | 0.037
+PASSOU | src.app.tests.test_visitors::test_cadastro_visitante_valida_novos_campos_sem_persistencia_parcial[changes24-400] | 0.036
+PASSOU | src.app.tests.test_visitors::test_cadastro_visitante_valida_novos_campos_sem_persistencia_parcial[changes25-404] | 0.039
+PASSOU | src.app.tests.test_visitors::test_cadastro_visitante_valida_novos_campos_sem_persistencia_parcial[changes26-400] | 0.037
+PASSOU | src.app.tests.test_visitors::test_cadastro_visitante_valida_novos_campos_sem_persistencia_parcial[changes27-400] | 0.034
+PASSOU | src.app.tests.test_visitors::test_cadastro_visitante_valida_novos_campos_sem_persistencia_parcial[changes28-400] | 0.034
+PASSOU | src.app.tests.test_visitors::test_periodo_visitante_exige_inicio_anterior_a_expiracao[igual] | 0.035
+PASSOU | src.app.tests.test_visitors::test_periodo_visitante_exige_inicio_anterior_a_expiracao[invertido] | 0.035
+PASSOU | src.app.tests.test_visitors::test_datas_visitante_com_offset_sao_armazenadas_em_utc | 0.158
+PASSOU | src.app.tests.test_visitors::test_filtro_administrativo_por_situacao[ativo] | 0.064
+PASSOU | src.app.tests.test_visitors::test_filtro_administrativo_por_situacao[agendado] | 0.061
+PASSOU | src.app.tests.test_visitors::test_filtro_administrativo_por_situacao[expirado] | 0.062
+PASSOU | src.app.tests.test_visitors::test_filtro_administrativo_por_situacao[revogado] | 0.061
+PASSOU | src.app.tests.test_visitors::test_paginacao_visitantes_nao_expoe_hashes | 0.050
+PASSOU | src.app.tests.test_visitors::test_listagem_visitantes_rejeita_filtros_invalidos[pagina=0] | 0.028
+PASSOU | src.app.tests.test_visitors::test_listagem_visitantes_rejeita_filtros_invalidos[pagina=abc] | 0.028
+PASSOU | src.app.tests.test_visitors::test_listagem_visitantes_rejeita_filtros_invalidos[limite=0] | 0.028
+PASSOU | src.app.tests.test_visitors::test_listagem_visitantes_rejeita_filtros_invalidos[limite=101] | 0.028
+PASSOU | src.app.tests.test_visitors::test_listagem_visitantes_rejeita_filtros_invalidos[limite=1.5] | 0.033
+PASSOU | src.app.tests.test_visitors::test_listagem_visitantes_rejeita_filtros_invalidos[status=invalido] | 0.028
+PASSOU | src.app.tests.test_visitors::test_consulta_individual_nao_confunde_user_ou_root_com_visitante | 0.054
+PASSOU | src.app.tests.test_visitors::test_visitante_inexistente_retorna_404[get-] | 0.029
+PASSOU | src.app.tests.test_visitors::test_visitante_inexistente_retorna_404[put-] | 0.029
+PASSOU | src.app.tests.test_visitors::test_visitante_inexistente_retorna_404[post-/revogar] | 0.029
+PASSOU | src.app.tests.test_visitors::test_visitante_inexistente_retorna_404[get-/acessos] | 0.031
+PASSOU | src.app.tests.test_visitors::test_edicao_periodo_local_e_uid_preserva_perfil | 0.051
+PASSOU | src.app.tests.test_visitors::test_edicao_invalida_nao_altera_visitante[changes0-400] | 0.044
+PASSOU | src.app.tests.test_visitors::test_edicao_invalida_nao_altera_visitante[changes1-400] | 0.042
+PASSOU | src.app.tests.test_visitors::test_edicao_invalida_nao_altera_visitante[changes2-400] | 0.043
+PASSOU | src.app.tests.test_visitors::test_edicao_invalida_nao_altera_visitante[changes3-404] | 0.046
+PASSOU | src.app.tests.test_visitors::test_edicao_invalida_nao_altera_visitante[changes4-409] | 0.044
+PASSOU | src.app.tests.test_visitors::test_edicao_invalida_nao_altera_visitante[changes5-400] | 0.042
+PASSOU | src.app.tests.test_visitors::test_revogacao_idempotente_nao_exclui_cadastro_ou_historico | 0.058
+PASSOU | src.app.tests.test_visitors::test_acesso_visitante_preserva_payload_respostas_e_registro[ativo-False-200] | 0.042
+PASSOU | src.app.tests.test_visitors::test_acesso_visitante_preserva_payload_respostas_e_registro[agendado-False-403] | 0.042
+PASSOU | src.app.tests.test_visitors::test_acesso_visitante_preserva_payload_respostas_e_registro[expirado-False-403] | 0.041
+PASSOU | src.app.tests.test_visitors::test_acesso_visitante_preserva_payload_respostas_e_registro[revogado-False-403] | 0.041
+PASSOU | src.app.tests.test_visitors::test_acesso_visitante_preserva_payload_respostas_e_registro[ativo-True-403] | 0.044
+PASSOU | src.app.tests.test_visitors::test_limites_temporais_inicio_inclusivo_expiracao_exclusiva[-1-False] | 0.033
+PASSOU | src.app.tests.test_visitors::test_limites_temporais_inicio_inclusivo_expiracao_exclusiva[0-True] | 0.034
+PASSOU | src.app.tests.test_visitors::test_limites_temporais_inicio_inclusivo_expiracao_exclusiva[3599-True] | 0.035
+PASSOU | src.app.tests.test_visitors::test_limites_temporais_inicio_inclusivo_expiracao_exclusiva[3600-False] | 0.033
+PASSOU | src.app.tests.test_visitors::test_expiracao_e_reavaliada_sem_alterar_banco_ou_scheduler | 0.047
+PASSOU | src.app.tests.test_visitors::test_historico_permanece_com_visitante_apos_reassociacao_pela_rota_original | 0.090
+PASSOU | src.app.tests.test_visitors::test_historico_administrativo_filtra_sem_inferir_eventos_antigos | 0.066
+PASSOU | src.app.tests.test_visitors::test_filtros_invalidos_do_historico[resultado=invalido] | 0.042
+PASSOU | src.app.tests.test_visitors::test_filtros_invalidos_do_historico[local=0] | 0.043
+PASSOU | src.app.tests.test_visitors::test_filtros_invalidos_do_historico[local=abc] | 0.041
+PASSOU | src.app.tests.test_visitors::test_filtros_invalidos_do_historico[inicio=sem-fuso] | 0.040
+PASSOU | src.app.tests.test_visitors::test_filtros_invalidos_do_historico[inicio=2026-11-01T12:00:00Z&fim=2026-11-01T10:00:00Z] | 0.040
+PASSOU | src.app.tests.test_visitors::test_filtros_invalidos_do_historico[pagina=0] | 0.040
+PASSOU | src.app.tests.test_visitors::test_visitante_usa_login_jwt_original_sem_promocao | 0.151
+PASSOU | src.app.tests.test_visitors::test_cadastro_publico_original_nao_e_fechado_pelo_novo_perfil | 0.154
+PASSOU | src.app.tests.test_visitors::test_falha_no_cadastro_visitante_reverte_todas_as_inclusoes[offline] | 0.156
+PASSOU | src.app.tests.test_visitors::test_falha_no_cadastro_visitante_reverte_todas_as_inclusoes[conflito] | 0.156
+PASSOU | src.app.tests.test_visitors::test_falha_de_gravacao_preserva_autorizacao_existente[editar] | 0.051
+PASSOU | src.app.tests.test_visitors::test_falha_de_gravacao_preserva_autorizacao_existente[revogar] | 0.043
+PASSOU | src.app.tests.test_visitors::test_falha_no_vinculo_do_historico_reverte_registro_e_nao_abre_porta | 0.040
+PASSOU | src.app.tests.test_visitors::test_json_invalido_e_tratado_apenas_nas_rotas_novas[[]-application/json] | 0.028
+PASSOU | src.app.tests.test_visitors::test_json_invalido_e_tratado_apenas_nas_rotas_novas[null-application/json] | 0.030
+PASSOU | src.app.tests.test_visitors::test_json_invalido_e_tratado_apenas_nas_rotas_novas[{-application/json] | 0.028
+PASSOU | src.app.tests.test_visitors::test_json_invalido_e_tratado_apenas_nas_rotas_novas[texto-text/plain] | 0.027
+PASSOU | src.app.tests.test_visitors::test_visitante_pode_ter_varios_locais_e_edicao_tem_efeito_no_proximo_acesso | 0.078
+PASSOU | src.app.tests.test_visitors::test_permissao_individual_de_comum_ou_root_independe_dos_locais_de_outro_visitante[root] | 0.043
+PASSOU | src.app.tests.test_visitors::test_permissao_individual_de_comum_ou_root_independe_dos_locais_de_outro_visitante[user] | 0.041
+PASSOU | src.app.tests.test_visitors::test_leitura_rfid_de_visitante_mantem_mac_e_resposta_originais[False] | 0.039
+PASSOU | src.app.tests.test_visitors::test_leitura_rfid_de_visitante_mantem_mac_e_resposta_originais[True] | 0.038
+PASSOU | src.app.tests.test_visitors::test_uid_numerica_herdada_permanece_aceita_sem_alterar_tipo_da_coluna | 0.185
+
+13. CATÁLOGO COMPLETO DOS TESTES DOM EXECUTADOS
+
+PASSOU | login original informa o perfil e libera somente os dois novos cartões Root | 0.631156 s
+PASSOU | users não vê os cartões nem abre as novas abas | 0.221980 s
+PASSOU | visitante não vê os cartões nem abre as novas abas | 0.161354 s
+PASSOU | listagem mostra validade, RFID, locais e situações recebidas sem inventar dados | 0.121179 s
+PASSOU | filtro de situação e tamanho da página usam somente o contrato existente | 0.136963 s
+PASSOU | cadastro converte horário local em ISO UTC e envia somente os sete campos permitidos | 0.239371 s
+PASSOU | cadastro inválido por periodo não dispara gravação | 0.188329 s
+PASSOU | cadastro inválido por locais não dispara gravação | 0.123515 s
+PASSOU | edição preserva UID numérica inalterada, identificação e precisão original do período | 0.172790 s
+PASSOU | edição sem alterações não envia PUT ou campos não permitidos | 0.128976 s
+PASSOU | revogação confirmada usa a rota existente e conserva o visitante no histórico | 0.148009 s
+PASSOU | histórico do visitante abre relatórios com seu identificador e sem alterar a rota original | 0.160178 s
+PASSOU | resumo usa contagens reais, série SVG e ranking; indicadores sem fonte continuam indisponíveis | 0.106725 s
+PASSOU | período, local, visitante e resultado são aplicados de forma igual aos dois endpoints | 0.242442 s
+PASSOU | CSV mantém os filtros aplicados mesmo com formulário alterado sem aplicar | 0.197602 s
+PASSOU | erro de limite do CSV fica visível e permite nova tentativa sem gerar arquivo | 0.088830 s
+PASSOU | paginação de acessos mantém filtros e não repete a consulta do resumo | 0.145485 s
+PASSOU | histórico vazio apresenta zeros reais e estados vazios, sem criar série ou ranking | 0.114411 s
+PASSOU | limitação da série diária e valores completos são apresentados explicitamente | 0.093472 s
+PASSOU | atividades têm filtros próprios e não recebem local ou visitante do acesso | 0.126899 s
+PASSOU | dados textuais novos são escapados como texto, inclusive em tabela e ranking | 0.096473 s
+PASSOU | logout limpa os dados administrativos, fecha o diálogo e retorna ao painel original | 0.134786 s
+PASSOU | resposta atrasada de consulta não reaparece após sair ou iniciar outra sessão | 0.097867 s
+PASSOU | resposta de filtro antigo não sobrescreve o recorte mais recente | 0.130243 s
+PASSOU | erro ao carregar referências impede envio até atualizar com sucesso | 0.084252 s
+PASSOU | conflito ao salvar permanece visível sem limpar o formulário ou fechar o diálogo | 0.141177 s
+PASSOU | JWT expirado nos novos endpoints retorna ao login e remove os dados privados | 0.096990 s
+PASSOU | todos os destinos anteriores da navegação e o alias de tags permanecem funcionando | 0.108961 s
+PASSOU | paginação de visitantes mantém a situação aplicada mesmo com seleção ainda não aplicada | 0.089230 s
+PASSOU | falha de conexao apresenta mensagem e permite reaplicar os filtros | 0.113111 s
+PASSOU | falha de json apresenta mensagem e permite reaplicar os filtros | 0.096407 s
+PASSOU | dashboard operacional apresenta os dados existentes e inicia com o painel Acessos | 0.113882 s
+PASSOU | cinco módulos alternam um único painel com seleção acessível e dashboard sempre visível | 0.145913 s
+PASSOU | filtros e CSV possuem uma instância compartilhada somente em Acessos e Exportação | 0.141924 s
+PASSOU | teclado usa setas Home e End para foco e seleção das abas sem recarregar a página | 0.144352 s
+PASSOU | módulos preservam recorte aplicado página atual e formulário pendente sem repetir consultas | 0.117181 s
+PASSOU | Patrimônio carrega atividades uma vez e alternar módulos não reaplica seus filtros | 0.150634 s
+PASSOU | Visitantes analítico reaproveita as cinco contagens sem consultar ou alterar contas | 0.320728 s
+PASSOU | Locais detalha somente o ranking recebido e mantém uma única instância dos gráficos | 0.106505 s
+PASSOU | Locais sem acessos autorizados apresenta estado vazio sem distribuição fictícia | 0.101270 s
+PASSOU | alternância interna não altera o conteúdo das outras páginas ou do diálogo de Visitantes | 0.114744 s
+PASSOU | logout limpa também os novos resumos e reinicia Acessos na próxima entrada | 0.192421 s
+PASSOU | ranking com 0 salas mostra Top 3 sem truncar dados do módulo Locais | 0.126079 s
+PASSOU | ranking com 1 salas mostra Top 3 sem truncar dados do módulo Locais | 0.108340 s
+PASSOU | ranking com 2 salas mostra Top 3 sem truncar dados do módulo Locais | 0.123545 s
+PASSOU | ranking com 3 salas mostra Top 3 sem truncar dados do módulo Locais | 0.134079 s
+PASSOU | ranking com 4 salas mostra Top 3 sem truncar dados do módulo Locais | 0.120765 s
+PASSOU | ranking com 10 salas mostra Top 3 sem truncar dados do módulo Locais | 0.096828 s
+PASSOU | expansão do ranking mantém ordem barras contagens e instâncias sem consultas adicionais | 0.113635 s
+PASSOU | novo recorte recolhe o ranking e usa todas as salas da resposta nova no módulo Locais | 0.103284 s
+PASSOU | expansão fica indisponível no estado de loading e não expõe ranking anterior | 0.126007 s
+PASSOU | expansão fica indisponível no estado de erro e não expõe ranking anterior | 0.127280 s
+PASSOU | nome malicioso continua sendo texto seguro quando a quarta sala é expandida | 0.104054 s
+PASSOU | dashboard mantém gráfico e resumo no topo indicadores gerais no meio e ranking abaixo | 0.129208 s
+PASSOU | expandir o ranking preserva Explorar Relatórios filtros tabelas e a instância do gráfico | 0.096073 s
+PASSOU | gráfico vazio mostra mensagem e ícone sem dados fictícios ou novas instâncias | 0.126689 s
+PASSOU | logout recolhe o ranking e a sessão seguinte inicia com Top 3 | 0.156025 s
+PASSOU | login não acrescenta consultas de permissões; ações ficam nas tabelas de Pessoas/Locais | 0.747268 s
+PASSOU | pessoa mostra identificação, RFID, tipo, credencial e permissões sem acesso universal | 0.249226 s
+PASSOU | visitante expirado mantém permissão vigente e acesso negado, com validade global visível | 0.143173 s
+PASSOU | consulta por sala distingue autorizados agora de todas e dos quatro estados individuais | 0.266966 s
+PASSOU | concessão sem prazo envia somente datas nulas e revogada false para o par escolhido | 0.141702 s
+PASSOU | concessão converte horário do navegador para UTC sem enviar campos de dispositivos | 0.153124 s
+PASSOU | editar vigência de revogada preserva estado e microssegundos do início omitido | 0.161833 s
+PASSOU | formulário inalterado e intervalo invertido não gravam | 0.175596 s
+PASSOU | reativação é explícita, confirmada e envia apenas revogada false | 0.145133 s
+PASSOU | revogar uma sala preserva a pessoa e a permissão da outra sala; cancelar não grava | 0.149211 s
+PASSOU | sala permite gerenciar pessoa existente e conceder para outra pessoa pelo ID | 0.137668 s
+PASSOU | paginação person envia página e limite sem alterar os filtros | 0.151363 s
+PASSOU | paginação local envia página e limite sem alterar os filtros | 0.116441 s
+PASSOU | HTTP 400 na consulta é apresentado e não revela dados anteriores | 0.122324 s
+PASSOU | HTTP 404 na consulta é apresentado e não revela dados anteriores | 0.104947 s
+PASSOU | HTTP 409 na consulta é apresentado e não revela dados anteriores | 0.160165 s
+PASSOU | HTTP 500 na consulta é apresentado e não revela dados anteriores | 0.219295 s
+PASSOU | users recebe 403 e não tem editor nem envia gravações | 0.099581 s
+PASSOU | visitante recebe 403 e não tem editor nem envia gravações | 0.108895 s
+PASSOU | 401 limpa consultas de pessoa e sala, com instrução para entrar novamente | 0.112516 s
+PASSOU | resposta de pessoa anterior não substitui a consulta mais recente | 0.136801 s
+PASSOU | logout limpa os componentes e descarta resposta pendente da sessão anterior | 0.131201 s
+PASSOU | texto recebido é exibido como texto, sem executar HTML | 0.126571 s
+PASSOU | falha de rede e JSON inválido têm mensagem visível | 0.084236 s
+PASSOU | gravação pendente bloqueia submissão duplicada e conflito 409 mantém o editor | 0.126241 s
+
+14. CATÁLOGO DA VALIDAÇÃO NO CHROMIUM
+
+PASSOU | 1440: sem busca de permissões no login
+PASSOU | 1440: identificação do usuário
+PASSOU | 1440: duas permissões distintas
+PASSOU | 1440: edição mantém revogação
+PASSOU | 1440: reativação explícita visível
+PASSOU | 1440: fuso visível
+PASSOU | 1440: Pessoas cabe na página
+PASSOU | 1440: PUT exato de reativação
+PASSOU | 1440: filtro efetivo omite visitante expirado
+PASSOU | 1440: expirada + vigente mostra Negado
+PASSOU | 1440: Locais cabe na página
+PASSOU | 1440: gerenciar a partir da sala abre Pessoas
+PASSOU | 1440: relatórios continuam disponíveis
+PASSOU | 1440: logout limpa dados novos
+PASSOU | 1440: usuário comum recebe 403 e fica sem editor
+PASSOU | 768: sem busca de permissões no login
+PASSOU | 768: identificação do usuário
+PASSOU | 768: duas permissões distintas
+PASSOU | 768: edição mantém revogação
+PASSOU | 768: reativação explícita visível
+PASSOU | 768: fuso visível
+PASSOU | 768: Pessoas cabe na página
+PASSOU | 768: PUT exato de reativação
+PASSOU | 768: filtro efetivo omite visitante expirado
+PASSOU | 768: expirada + vigente mostra Negado
+PASSOU | 768: Locais cabe na página
+PASSOU | 768: tabela tem rolagem interna
+PASSOU | 768: gerenciar a partir da sala abre Pessoas
+PASSOU | 768: relatórios continuam disponíveis
+PASSOU | 768: logout limpa dados novos
+PASSOU | 768: usuário comum recebe 403 e fica sem editor
+PASSOU | 390: sem busca de permissões no login
+PASSOU | 390: identificação do usuário
+PASSOU | 390: duas permissões distintas
+PASSOU | 390: edição mantém revogação
+PASSOU | 390: reativação explícita visível
+PASSOU | 390: fuso visível
+PASSOU | 390: Pessoas cabe na página
+PASSOU | 390: PUT exato de reativação
+PASSOU | 390: filtro efetivo omite visitante expirado
+PASSOU | 390: expirada + vigente mostra Negado
+PASSOU | 390: Locais cabe na página
+PASSOU | 390: tabela tem rolagem interna
+PASSOU | 390: gerenciar a partir da sala abre Pessoas
+PASSOU | 390: relatórios continuam disponíveis
+PASSOU | 390: logout limpa dados novos
+PASSOU | 390: usuário comum recebe 403 e fica sem editor
+
+15. HASHES DOS ARQUIVOS DIRETAMENTE ENVOLVIDOS (EXCETO ESTE RELATÓRIO)
+
+c8820a9d5090e7d786d21553608f268f53adefaec8f0e9d2398264d492b1173b  src/app/static/permissions.css
+fe5510b0c3e9500f34d72867520b507334f13a06876798e9acfc3162798c3b8f  src/app/static/permissions.js
+1b5d3b7bb396dce6b9d3de61cc341345fb58aa07201751d6d5017f8fd76d271a  src/app/static/script.js
+132a2cf02e1ff6002ca85631cb319596aa2633a9b4cfc6925476c4b069e256dd  src/app/templates/index.html
+d37e39cd20ad605aa1f3f9a2313c7a21c3eb753cd73ede8e60f11c668b333e99  src/app/templates/permissions_local.html
+4439b269f3d31e9134a51a9807bc598bc38f7c4f55d94ef796496a9465dd60e5  src/app/templates/permissions_people.html
+82cc73034db070cac3b2f5487b77f060f50dce1ef65755f2c2a6a17135ec50fd  src/app/tests/frontend/admin.test.cjs
+382518742d6a57727eabe66a1bbefb06da9dfae2ccf64b21e37ef74224f0f1bb  src/app/tests/frontend/permissions.test.cjs
+15a1aba23cef6f377589c7ea8e0057fb4dd1f71428f3842c04279f5af5b235c0  src/app/tests/test_permissions_frontend.py
+
+Demais hashes estão em preservacao.json. Backend e componentes protegidos sem mudanças nesta etapa.

@@ -1,0 +1,30 @@
+<section class="st-permissions" id="st-local-permissions" aria-labelledby="st-local-title">
+    <h3 id="st-local-title">Pessoas autorizadas por sala</h3>
+    <p>Consulte quem pode acessar agora ou selecione uma situação para gerenciar as permissões individuais. Administração exclusiva de Root.</p>
+    <form id="st-local-search" class="st-permission-fields">
+        <label>ID da sala<input name="local" type="number" min="1" step="1" required></label>
+        <label>Exibir<select name="situacao">
+            <option value="">Autorizados agora</option><option value="todas">Todas as permissões</option>
+            <option value="vigente">Permissão vigente</option><option value="agendada">Permissão agendada</option>
+            <option value="expirada">Permissão expirada</option><option value="revogada">Permissão revogada</option>
+        </select></label>
+        <button type="submit">Consultar sala</button>
+    </form>
+    <p id="st-local-message" role="status" aria-live="polite"></p>
+    <div id="st-local-detail" hidden>
+        <h4 id="st-local-name"></h4>
+        <p>“Autorizados agora” considera a credencial e a permissão. Os demais filtros mostram a situação individual, inclusive quando a credencial não permite o acesso.</p>
+        <div class="st-permission-scroll" tabindex="0" role="region" aria-label="Pessoas e autorizações da sala">
+            <table><thead><tr><th>Pessoa / ID</th><th>Tipo</th><th>RFID</th><th>Credencial / validade</th><th>Início</th><th>Expiração</th><th>Permissão</th><th>Acesso agora</th><th>Ações</th></tr></thead><tbody id="st-local-rows"></tbody></table>
+        </div>
+        <div class="st-permission-pager">
+            <button type="button" id="st-local-prev" disabled>Anterior</button>
+            <span id="st-local-page"></span>
+            <button type="button" id="st-local-next" disabled>Próxima</button>
+        </div>
+        <form id="st-local-add" class="st-permission-fields">
+            <label>ID da pessoa<input name="pessoa" type="number" min="1" step="1" required></label>
+            <button type="submit">Gerenciar pessoa nesta sala</button>
+        </form>
+    </div>
+</section>

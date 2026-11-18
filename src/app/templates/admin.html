@@ -1,0 +1,126 @@
+<section id="aba-visitantes" class="st-admin secao-conteudo hidden fade-in space-y-6" aria-labelledby="st-visitantes-titulo">
+    <div class="flex flex-wrap justify-between items-center gap-4 border-b border-gray-700 pb-4">
+        <div><h2 id="st-visitantes-titulo" class="text-2xl font-bold text-white"><i class="fa-solid fa-user-clock text-purple-400 mr-2" aria-hidden="true"></i>Visitantes</h2><button type="button" onclick="voltarAoDashboard()" class="text-sm text-gray-400 hover:text-purple-400 mt-2">← Voltar ao Painel</button></div>
+        <button type="button" id="st-visitante-novo" class="st-button bg-indigo-600 hover:bg-indigo-700">Novo visitante</button>
+    </div>
+    <p class="text-sm text-gray-400">Autorizações temporárias para os locais selecionados. A expiração é verificada a cada tentativa de acesso.</p>
+    <form id="st-visitantes-filtros" class="st-panel flex flex-wrap items-end gap-4">
+        <label class="st-field">Situação<select name="status"><option value="">Todas</option><option value="ativo">Ativos</option><option value="agendado">Agendados</option><option value="expirado">Expirados</option><option value="revogado">Revogados</option></select></label>
+        <label class="st-field">Por página<select name="limite"><option value="25">25</option><option value="50">50</option><option value="100">100</option></select></label>
+        <button type="submit" class="st-button bg-gray-700 hover:bg-gray-600">Aplicar filtros</button>
+    </form>
+    <p id="st-visitantes-mensagem" class="st-message" role="status" aria-live="polite"></p>
+    <div class="st-panel p-0 overflow-x-auto"><table class="st-table"><caption class="sr-only">Visitantes cadastrados e suas autorizações</caption><thead><tr><th>Identificação</th><th>Credencial RFID</th><th>Validade</th><th>Locais autorizados</th><th>Situação</th><th>Ações</th></tr></thead><tbody id="st-visitantes-corpo"></tbody></table></div>
+    <p id="st-visitantes-fuso" class="text-xs text-gray-400"></p>
+    <div class="st-pagination"><button type="button" id="st-visitantes-anterior" class="st-button bg-gray-700" disabled>Anterior</button><span id="st-visitantes-pagina" aria-live="polite">Nenhuma consulta realizada.</span><button type="button" id="st-visitantes-proxima" class="st-button bg-gray-700" disabled>Próxima</button></div>
+</section>
+
+<section id="aba-relatorios" class="st-admin secao-conteudo hidden fade-in space-y-6" aria-labelledby="st-relatorios-titulo">
+    <header class="st-report-heading">
+        <div><p class="st-report-eyebrow">MONITORAMENTO E PATRIMÔNIO</p><h2 id="st-relatorios-titulo">Indicadores e Relatórios</h2></div>
+        <button type="button" onclick="voltarAoDashboard()" class="st-report-back">← Voltar ao Painel</button>
+    </header>
+
+    <div id="st-dashboard-operacional" class="st-report-dashboard" aria-labelledby="st-dashboard-titulo">
+        <div class="st-report-dashboard-heading"><div><span class="st-report-mark" aria-hidden="true"><i class="fa-solid fa-chart-column"></i></span><h3 id="st-dashboard-titulo">Dashboard Operacional</h3><p>Visão geral das informações e atividades registradas no Safe-Track.</p></div><span class="st-report-scope">Cadastros atuais · Acessos no recorte</span></div>
+        <p id="st-acessos-recorte" class="st-report-period"></p>
+        <p id="st-acessos-mensagem" class="st-message" role="status" aria-live="polite"></p>
+        <div class="st-dashboard-primary">
+            <div id="st-dashboard-chart" class="st-report-chart-panel st-dashboard-chart" aria-labelledby="st-dashboard-chart-titulo"><h4 id="st-dashboard-chart-titulo">Evolução diária de acessos</h4><div class="st-report-legend"><span><i class="st-report-dot st-report-dot-success" aria-hidden="true"></i>Autorizados</span><span><i class="st-report-dot st-report-dot-denied" aria-hidden="true"></i>Negados</span><span><i class="st-report-dot st-report-dot-neutral" aria-hidden="true"></i>Indefinidos</span></div><div id="st-grafico-diario" class="st-report-chart-scroll"></div><p id="st-grafico-limite" class="st-report-note"></p><details class="st-report-series"><summary>Ver valores por dia (UTC)</summary><div class="st-series-table"><table class="st-table"><thead><tr><th>Dia</th><th>Autorizados</th><th>Negados</th><th>Indefinidos</th><th>Total</th></tr></thead><tbody id="st-diaria-corpo"></tbody></table></div></details></div>
+            <div id="st-dashboard-summary" class="st-dashboard-summary" aria-labelledby="st-dashboard-summary-titulo"><h4 id="st-dashboard-summary-titulo">Resumo de acessos</h4><p class="st-dashboard-note">Tentativas registradas no recorte.</p><dl id="st-metricas-acessos"></dl></div>
+        </div>
+        <div id="st-dashboard-general" class="st-dashboard-general" aria-labelledby="st-dashboard-general-titulo">
+            <h4 id="st-dashboard-general-titulo">Indicadores Gerais</h4><p class="st-dashboard-note">Cadastros e credenciais na situação atual.</p>
+            <div class="st-report-overview" aria-label="Cadastros atuais e visitantes ativos">
+                <dl id="st-metricas-cadastros"></dl>
+                <dl class="st-report-active"><div class="st-metric" data-st-dashboard-metric="visitantes"><i class="fa-solid fa-user-clock st-dashboard-metric-icon" aria-hidden="true"></i><dt>Visitantes ativos</dt><dd id="st-metrica-visitantes-ativos">—</dd></div></dl>
+            </div>
+        </div>
+        <div id="st-dashboard-ranking" class="st-dashboard-ranking" aria-labelledby="st-dashboard-ranking-titulo">
+            <div class="st-dashboard-ranking-heading"><div><h4 id="st-dashboard-ranking-titulo">Salas mais acessadas</h4><p id="st-ranking-resumo" class="st-dashboard-note">Top 3 de acessos autorizados no recorte.</p></div><span class="st-dashboard-ranking-tag">Acessos autorizados</span></div>
+            <ol id="st-ranking" class="st-report-ranking"></ol>
+            <p id="st-ranking-limite" class="st-dashboard-note">Esta fonte disponibiliza até 10 salas. O ranking integral depende de dados adicionais e não está disponível aqui.</p>
+            <button type="button" id="st-ranking-expandir" class="st-dashboard-ranking-toggle" aria-controls="st-ranking" aria-expanded="false" hidden disabled>Ver ranking disponível (até 10 salas)</button>
+        </div>
+        <details class="st-report-unavailable"><summary>Disponibilidade de outros indicadores</summary><ul id="st-indisponiveis"></ul></details>
+    </div>
+
+    <div class="st-report-explore"><div><p class="st-report-eyebrow">CONSULTAS DETALHADAS</p><h3>Explorar Relatórios</h3></div><p>Escolha um módulo para consultar os detalhes.</p></div>
+    <div class="st-report-modules" role="tablist" aria-label="Módulos de relatórios">
+        <button type="button" id="st-relatorio-tab-acessos" class="st-report-module" data-st-report-tab="acessos" role="tab" aria-selected="true" aria-controls="st-relatorio-painel-acessos" tabindex="0"><i class="fa-solid fa-door-open" aria-hidden="true"></i><span>Acessos</span><small>Histórico e estatísticas de tentativas de acesso.</small></button>
+        <button type="button" id="st-relatorio-tab-visitantes" class="st-report-module" data-st-report-tab="visitantes" role="tab" aria-selected="false" aria-controls="st-relatorio-painel-visitantes" tabindex="-1"><i class="fa-solid fa-user-clock" aria-hidden="true"></i><span>Visitantes</span><small>Indicadores sobre credenciais temporárias.</small></button>
+        <button type="button" id="st-relatorio-tab-patrimonio" class="st-report-module" data-st-report-tab="patrimonio" role="tab" aria-selected="false" aria-controls="st-relatorio-painel-patrimonio" tabindex="-1"><i class="fa-solid fa-boxes-stacked" aria-hidden="true"></i><span>Patrimônio</span><small>Informações e atividades patrimoniais.</small></button>
+        <button type="button" id="st-relatorio-tab-locais" class="st-report-module" data-st-report-tab="locais" role="tab" aria-selected="false" aria-controls="st-relatorio-painel-locais" tabindex="-1"><i class="fa-solid fa-map-location-dot" aria-hidden="true"></i><span>Locais</span><small>Estatísticas sobre ambientes monitorados.</small></button>
+        <button type="button" id="st-relatorio-tab-exportacao" class="st-report-module" data-st-report-tab="exportacao" role="tab" aria-selected="false" aria-controls="st-relatorio-painel-exportacao" tabindex="-1"><i class="fa-solid fa-file-csv" aria-hidden="true"></i><span>Relatórios e Exportação</span><small>Consultas detalhadas e exportação de informações.</small></button>
+    </div>
+
+    <div id="st-relatorio-ferramentas" class="st-report-tools" aria-labelledby="st-relatorio-ferramentas-titulo">
+        <h3 id="st-relatorio-ferramentas-titulo">Filtros de acesso</h3>
+    <form id="st-acessos-filtros" class="st-panel grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <label class="st-field">Data inicial (UTC)<input name="inicio" type="date"></label>
+        <label class="st-field">Data final inclusiva (UTC)<input name="fim" type="date"></label>
+        <label class="st-field">Local<select name="local" data-st-locais><option value="">Todos os locais</option></select></label>
+        <label class="st-field">ID do visitante<input name="visitante" type="number" min="1" step="1" placeholder="Todos os visitantes"></label>
+        <label class="st-field">Resultado<select name="resultado"><option value="">Todos os resultados</option><option value="Liberado">Liberado</option><option value="Negado">Negado</option><option value="Indefinido">Indefinido</option></select></label>
+        <div class="flex flex-wrap items-end gap-2"><button type="submit" class="st-button bg-indigo-600 hover:bg-indigo-700">Aplicar filtros</button><button type="button" id="st-acessos-limpar" class="st-button bg-gray-700">Limpar</button></div>
+        <p class="sm:col-span-2 lg:col-span-3 text-xs text-gray-400">Sem datas, consulta todo o histórico. Os filtros se aplicam aos acessos; os cadastros e a situação dos visitantes representam o momento atual. Horários dos relatórios em UTC.</p>
+    </form>
+        <p id="st-locais-mensagem" class="st-message" role="status" aria-live="polite"></p>
+        <div class="st-report-export-actions"><p>O CSV usa os filtros aplicados, independentemente da página. Limite de 10.000 registros.</p><button type="button" id="st-acessos-csv" class="st-button bg-emerald-700 hover:bg-emerald-600" disabled><i class="fa-solid fa-download mr-2" aria-hidden="true"></i>Exportar recorte em CSV</button></div>
+    </div>
+
+    <div id="st-relatorio-painel-acessos" class="st-report-detail" data-st-report-panel="acessos" role="tabpanel" aria-labelledby="st-relatorio-tab-acessos" tabindex="0">
+        <h3>Histórico de tentativas de acesso</h3><p class="st-report-note">Nomes e endereços representam os cadastros atuais. O visitante aparece somente quando foi identificado no evento.</p>
+        <div class="st-report-table-wrap"><table class="st-table"><caption class="sr-only">Tentativas de acesso em UTC</caption><thead><tr><th>Horário (UTC)</th><th>Local</th><th>UID</th><th>Visitante registrado</th><th>Resultado</th></tr></thead><tbody id="st-acessos-corpo"></tbody></table></div>
+        <div class="st-pagination"><button type="button" id="st-acessos-anterior" class="st-button bg-gray-700" disabled>Anterior</button><span id="st-acessos-pagina" aria-live="polite">Nenhuma consulta realizada.</span><button type="button" id="st-acessos-proxima" class="st-button bg-gray-700" disabled>Próxima</button></div>
+    </div>
+    <div id="st-relatorio-painel-visitantes" class="st-report-detail" data-st-report-panel="visitantes" role="tabpanel" aria-labelledby="st-relatorio-tab-visitantes" tabindex="0" hidden>
+        <h3>Credenciais temporárias</h3><p class="st-report-note">Situação atual dos visitantes cadastrados. Esses totais não são filtrados pelo período dos acessos. A administração de visitantes permanece em seu módulo próprio.</p>
+        <dl id="st-metricas-visitantes" class="st-report-visitor-metrics"></dl>
+    </div>
+    <div id="st-relatorio-painel-patrimonio" class="st-report-detail" data-st-report-panel="patrimonio" role="tabpanel" aria-labelledby="st-relatorio-tab-patrimonio" tabindex="0" hidden>
+        <h3>Informações patrimoniais</h3><dl class="st-report-single-metric"><div class="st-metric"><dt>Patrimônios cadastrados atualmente</dt><dd id="st-patrimonio-total">—</dd></div></dl>
+        <p class="st-report-note">Dados de retiradas e movimentações indisponíveis: os registros existentes são consultas e não comprovam movimentação física.</p>
+    <details id="st-atividades-painel" class="st-panel space-y-4">
+        <summary class="cursor-pointer text-lg font-bold">Atividades patrimoniais registradas</summary>
+        <p class="text-sm text-gray-400">Histórico de consultas ao patrimônio. Esses registros não comprovam retirada, devolução ou movimentação. Os filtros abaixo são independentes dos filtros de acesso.</p>
+        <form id="st-atividades-filtros" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            <label class="st-field">Data inicial (UTC)<input name="inicio" type="date"></label><label class="st-field">Data final inclusiva (UTC)<input name="fim" type="date"></label>
+            <label class="st-field">ID do objeto<input name="objeto" type="number" min="1" step="1"></label><label class="st-field">ID do usuário registrado<input name="usuario" type="number" min="1" step="1"></label>
+            <label class="st-field">Ação<select name="acao"><option value="">Todas as ações</option><option value="buscar_objeto_id">Consulta por ID</option><option value="buscar_objeto_uid">Consulta por UID</option></select></label><label class="st-field">Resultado<select name="resultado"><option value="">Todos</option><option value="sucesso">Sucesso</option><option value="falha">Falha</option></select></label>
+            <div class="flex flex-wrap gap-2"><button type="submit" class="st-button bg-indigo-600">Consultar atividades</button><button type="button" id="st-atividades-limpar" class="st-button bg-gray-700">Limpar</button></div>
+        </form>
+        <p id="st-atividades-mensagem" class="st-message" role="status" aria-live="polite"></p>
+        <p id="st-atividades-recorte" class="text-xs text-gray-400"></p>
+        <div class="overflow-x-auto"><table class="st-table"><caption class="sr-only">Atividades patrimoniais em UTC</caption><thead><tr><th>Horário (UTC)</th><th>Objeto</th><th>Usuário registrado</th><th>Ação</th><th>Resultado</th></tr></thead><tbody id="st-atividades-corpo"></tbody></table></div>
+        <div class="st-pagination"><button type="button" id="st-atividades-anterior" class="st-button bg-gray-700" disabled>Anterior</button><span id="st-atividades-pagina" aria-live="polite">Nenhuma consulta realizada.</span><button type="button" id="st-atividades-proxima" class="st-button bg-gray-700" disabled>Próxima</button></div>
+    </details>
+    </div>
+    <div id="st-relatorio-painel-locais" class="st-report-detail" data-st-report-panel="locais" role="tabpanel" aria-labelledby="st-relatorio-tab-locais" tabindex="0" hidden>
+        <h3>Utilização dos ambientes</h3><dl class="st-report-single-metric"><div class="st-metric"><dt>Locais cadastrados atualmente</dt><dd id="st-locais-total">—</dd></div></dl>
+        <p class="st-report-note">Detalhamento do mesmo ranking apresentado no dashboard: até 10 locais por tentativas Liberado no recorte. A fonte atual não fornece uma distribuição completa de resultados por todos os locais.</p>
+        <div class="st-report-table-wrap"><table class="st-table"><caption class="sr-only">Ranking disponível de acessos autorizados por local</caption><thead><tr><th>Local</th><th>Acessos autorizados</th></tr></thead><tbody id="st-locais-corpo"></tbody></table></div>
+    </div>
+    <div id="st-relatorio-painel-exportacao" class="st-report-detail" data-st-report-panel="exportacao" role="tabpanel" aria-labelledby="st-relatorio-tab-exportacao" tabindex="0" hidden>
+        <h3>Relatórios e Exportação</h3><p class="st-report-note">Use os filtros acima e clique em Aplicar filtros antes de exportar. A mesma consulta atualiza os indicadores do dashboard e o histórico do módulo Acessos.</p>
+        <ul class="st-report-export-notes"><li>Todo o recorte aplicado é exportado, até o limite de 10.000 registros.</li><li>O arquivo inclui horário UTC, local, UID, resultado e visitante, quando registrado.</li><li>O CSV mantém acentos e usa ponto e vírgula como separador. Textos que poderiam ser fórmulas recebem proteção na exportação.</li></ul>
+    </div>
+</section>
+
+<dialog id="st-visitante-dialogo" class="st-admin st-admin-dialog bg-gray-800 text-gray-100 border border-gray-700 rounded-2xl w-full max-w-3xl p-0" aria-labelledby="st-visitante-dialogo-titulo">
+    <div class="p-6 md:p-8"><div class="flex justify-between items-center gap-4 mb-5"><h2 id="st-visitante-dialogo-titulo" class="text-xl font-bold">Novo visitante</h2><button type="button" id="st-visitante-fechar" class="st-button bg-gray-700" aria-label="Fechar formulário de visitante">Fechar</button></div>
+        <form id="st-visitante-formulario" class="space-y-5">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4"><label class="st-field">Nome<input name="nome" autocomplete="off" maxlength="100" required></label><label class="st-field">E-mail de login<input name="email" type="email" autocomplete="off" maxlength="100" required></label></div>
+            <label id="st-visitante-senha-campo" class="st-field">Senha de login<input name="senha" type="password" autocomplete="new-password" maxlength="256" required></label>
+            <p id="st-visitante-identificacao-nota" class="text-xs text-gray-400" hidden>Esta edição altera a credencial, a validade e os locais autorizados. A identificação é exibida para consulta.</p>
+            <label class="st-field">Credencial RFID<input name="credencial_rfid" list="st-visitante-tags" autocomplete="off" maxlength="128" required><datalist id="st-visitante-tags"></datalist></label>
+            <p class="text-xs text-gray-400">Escolha uma tag já cadastrada e livre ou informe sua UID. A lista será conferida ao salvar.</p>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4"><label class="st-field">Início da autorização<input name="inicio" type="datetime-local" step="1" required></label><label class="st-field">Expiração da autorização<input name="expiracao" type="datetime-local" step="1" required></label></div>
+            <p id="st-visitante-formulario-fuso" class="text-xs text-gray-400"></p>
+            <fieldset class="border border-gray-600 rounded-lg p-4"><legend class="px-2 text-sm font-bold">Locais autorizados</legend><div id="st-visitante-locais" class="grid grid-cols-1 md:grid-cols-2 gap-3"></div></fieldset>
+            <button type="button" id="st-visitante-referencias" class="text-sm text-indigo-300 underline">Atualizar tags e locais</button>
+            <p id="st-visitante-formulario-mensagem" class="st-message" role="status" aria-live="polite"></p>
+            <button type="submit" id="st-visitante-salvar" class="st-button bg-emerald-700 hover:bg-emerald-600 w-full">Cadastrar visitante</button>
+        </form>
+    </div>
+</dialog>

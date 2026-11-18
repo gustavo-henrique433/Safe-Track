@@ -66,6 +66,7 @@ async function fazerLogin() {
         const result = await response.json();
         if (response.ok) {
             jwtToken = result.access_token;
+            if (window.SafeTrackAdmin) window.SafeTrackAdmin.setSession(result.user_type, jwtToken);
             document.getElementById('tela-login').style.display = 'none';
             listarTodosObjetos();
             listarTodasTags();
@@ -80,6 +81,7 @@ async function fazerLogin() {
 }
 
 function fazerLogout() {
+    if (window.SafeTrackAdmin) window.SafeTrackAdmin.clearSession();
     jwtToken = null;
     document.getElementById('tela-login').style.display = 'flex';
     document.getElementById('login_senha').value = '';
@@ -416,6 +418,7 @@ async function carregarLocaisNoDropdown() {
                             <td class="px-6 py-4 text-gray-400">${local.descricao}</td>
                             <td class="px-6 py-4 text-gray-400">${local.responsavel}</td>
                             <td class="px-6 py-4 text-right">
+                                <button type="button" data-st-room-permissions="${local.id}" class="text-blue-400 hover:bg-blue-500/10 px-3 py-1 rounded border border-blue-500/30">Autorizados</button>
                                 <button onclick="abrirModalEditarLocal(${local.id})" class="text-amber-500 hover:bg-amber-500/10 px-3 py-1 rounded border border-amber-500/30"><i class="fa-solid fa-pen mr-1"></i> Editar</button>
                             </td>
                         </tr>`;
@@ -494,6 +497,7 @@ async function listarTodosUsuarios() {
                         <td class="px-6 py-4 font-bold text-white">${user.nome}</td>
                         <td class="px-6 py-4 text-gray-400">${user.email}</td>
                         <td class="px-6 py-4 font-mono text-emerald-400">${user.credencial_rfid || '-'}</td>
+                        <td class="px-6 py-4"><button type="button" data-st-person-permissions="${user.id}" class="text-blue-400 hover:bg-blue-500/10 px-3 py-1 rounded border border-blue-500/30">Permissões</button></td>
                     </tr>`;
             });
         }

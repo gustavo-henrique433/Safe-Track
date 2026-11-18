@@ -1,0 +1,1545 @@
+SAFE-TRACK — PERMISSÕES INDIVIDUAIS: ETAPA B, BACKEND
+============================================================
+
+Branch: desenvolvimento.
+
+1. ESCOPO APROVADO E ESTADO DA ENTREGA
+
+Implementado o backend de autorização pessoa/local conforme o plano aprovado:
+uma relação compartilhada, vigência e revogação individual, quatro operações
+administrativas Root e verificação na rota original de acesso físico.
+
+A aprovação incluiu a transição das permissões de visitantes e a manutenção
+da limitação existente: MAC é validado no fluxo /cadastrar_rfid, não na
+chamada de /acessar_porta. Não foram acrescentados campos ao firmware.
+
+Esta é a Etapa B. A integração dos controles novos em Pessoas e Locais
+pertence à Etapa C, ainda não iniciada. Os testes necessários à entrega
+do backend foram executados; não houve mudança de interface.
+
+IMPORTANTE PARA ATIVAÇÃO NO BANCO EXISTENTE
+
+A transferência dos vínculos antigos NÃO foi executada no banco real.
+O novo backend consulta somente permissoes_acesso. Antes de utilizá-lo com
+visitantes já cadastrados, é necessário preparar uma cópia consistente do
+banco, validar nela a criação da tabela e a transferência dos vínculos e
+autorizar a execução no banco de uso. Não basta existir visitante_locais.
+
+Sem a transferência, vínculos que existam apenas na tabela antiga não
+autorizam a porta. Usuários comuns e Root sem permissão explícita também
+recebem negação, conforme a regra aprovada. Não há concessão automática.
+
+O db.create_all já existente na inicialização da aplicação pode criar a
+tabela nova quando o responsável iniciar o projeto; isso NÃO copia os dados
+antigos. O comando de inicialização original não foi modificado.
+
+2. ARQUIVOS MODIFICADOS NESTA ETAPA
+
+src/database/models.py
+  Acrescenta PermissaoAcesso e User.permissoes/pode_acessar. A relação
+  Visitante.locais passa a ser consulta somente de leitura da fonte nova,
+  e sua decisão física combina vigência global e individual.
+  Nenhuma coluna existente mudou de tipo. A hierarquia permanece a mesma.
+
+src/app/routes/control_door.py
+  Acrescenta a autorização individual na rota original e quatro endpoints
+  no blueprint já existente. Não criou outro blueprint ou rota de abertura.
+  As consultas da porta ficam dentro do tratamento de erros, para não
+  autorizar por padrão se a consulta ou gravação falhar.
+
+src/app/routes/visitors.py
+  Somente a criação e edição de visitantes foram adaptadas à associação
+  canônica. Os contratos JSON, o período global, a revogação global e o
+  histórico de visitantes foram preservados.
+
+src/app/tests/conftest.py
+  Somente a factory de visitantes foi adaptada para criar permissões na
+  fonte canônica. Não concede acesso automaticamente aos usuários comuns.
+  Os bloqueios de banco real/rede e o isolamento não foram modificados.
+
+src/app/tests/test_models.py
+  Acrescenta a tabela aprovada ao teste de esquema e dez casos de restrições
+  e transferência controlada. O teste de esquema foi renomeado para indicar
+  as extensões aprovadas. As estruturas antigas continuam verificadas.
+
+src/app/tests/test_access.py
+  A fixture do cenário autorizado agora concede explicitamente sua sala.
+  As expectativas de status, resposta e histórico foram mantidas.
+
+src/app/tests/test_visitors.py
+  O cenário de usuário comum/Root em sala diferente passou a incluir sua
+  permissão explícita, independente da visita de outra pessoa. Foi renomeado
+  para refletir a regra aprovada, mantendo suas asserções positivas.
+
+src/app/tests/test_dashboards.py
+  O cenário que gera uma liberação real pela porta concede antes a permissão
+  necessária. Não houve alteração do serviço, das rotas ou da interface dos
+  dashboards para adaptar as métricas.
+
+Arquivos criados:
+
+src/database/permission_legacy.py
+  Função explícita de transferência. Não é importada ou chamada pelo app.
+
+src/app/tests/test_permissions.py
+  83 casos novos de autorização, administração, vigência e regressões.
+
+documents/permissoes_individuais_backend.txt
+  Este relatório.
+
+3. ESTRUTURA CANÔNICA
+
+Tabela: permissoes_acesso.
+
+pessoa_id: INTEGER, obrigatório, FK users.id, parte da PK.
+local_id: INTEGER, obrigatório, FK local.id, parte da PK.
+inicio: DATETIME UTC sem offset, opcional.
+expiracao: DATETIME UTC sem offset, opcional.
+revogada: BOOLEAN obrigatório, padrão falso, também com default no servidor.
+
+A PK composta impede duplicação pessoa/local. CHECK de período exige
+inicio < expiracao quando ambos existem. CHECK booleano restringe revogada.
+Não há id artificial nem coluna redundante para armazenar situação derivada.
+
+Relacionamentos: User.permissoes e PermissaoAcesso.pessoa/local.
+As permissões são carregadas quando necessárias; não são buscadas
+automaticamente em cada consulta comum de usuários/login.
+
+Visitante.locais consulta a associação nova, sem permissões revogadas.
+É somente leitura: não há dois relacionamentos mutáveis escrevendo a mesma
+tabela. Sua serialização continua com id/endereco dos locais.
+
+visitante_locais permanece com definição, PK e FKs anteriores, para preservar
+os dados legados. Não é lida como fallback nem escrita pelas operações
+administrativas novas. A única fonte ativa é permissoes_acesso.
+
+Os vínculos mantidos na edição do visitante preservam seus limites
+individuais. Alterar somente a validade global não reativa uma sala revogada.
+Remover um local da lista explícita revoga o vínculo sem apagá-lo; reincluir
+explicitamente um local permite reativá-lo, mantendo seus limites individuais.
+
+4. VIGÊNCIA E DECISÃO FÍSICA
+
+A situação individual é calculada em UTC no momento da solicitação:
+  revogada: flag verdadeira, com prioridade sobre datas;
+  agendada: início definido e agora < início;
+  expirada: expiração definida e agora >= expiração;
+  vigente: não revogada e dentro dos limites definidos.
+
+Início é inclusivo; expiração é exclusiva. Sem início/fim, a permissão é
+imediata e sem expiração individual. Não existe scheduler.
+
+A porta exige:
+  UID informada e tag efetivamente cadastrada;
+  pessoa associada, com status_conta verdadeiro;
+  local existente;
+  permissão explícita e vigente para aquela pessoa/local;
+  para Visitante, situação global ativo no mesmo instante de referência.
+
+Root não possui isenção de autorização física. Revogar uma sala não exclui
+a pessoa, não altera seu status_conta nem invalida as permissões de outras
+salas. Trocar o dono de uma tag não transfere permissões entre pessoas.
+
+Datas enviadas pelo ESP32 não substituem o relógio do servidor na decisão.
+O campo date já enviado por certos sketches continua sem uso na rota da porta.
+
+5. CONTRATO DA PORTA PRESERVADO
+
+POST /acessar_porta
+  Entradas utilizadas: uid_solicitante e local.
+  Não exige JWT humano, token de dispositivo, cabeçalho novo ou campo MAC.
+  400 para JSON vazio, conforme antes.
+  404 para local ausente/inexistente, antes de gravar uma tentativa.
+  403: {"message":"Acesso negado","abrir":false}.
+  200: {"message":"Abrindo porta para <nome>","abrir":true}.
+  500: {"message":"Erro interno no servidor ao registrar acesso."}.
+
+Registro_Acesso mantém UID, local, horário do servidor e Liberado/Negado.
+VisitanteAcesso continua vinculando a tentativa ao visitante identificado.
+Erro na consulta, gravação ou vínculo de histórico não libera a porta.
+UID ausente/vazia não pode selecionar uma conta sem tag e abrir a porta.
+
+6. OPERAÇÕES ADMINISTRATIVAS NOVAS
+
+Usam o JWT humano existente e a mesma verificação de perfil Root. Não alteram
+login, logout, emissão de JWT ou BLOCKLIST. Sem JWT retorna 401; sem perfil
+Root retorna 403. Erros das operações novas são tratados localmente:
+400 para dados/filtros inválidos, 404 para entidade inexistente, 409 para
+conflito de integridade e 500 genérico para erro SQLAlchemy, com rollback.
+
+GET /pessoas/<pessoa_id>/permissoes
+  Consulta identificação/credencial e todas as permissões da pessoa,
+  inclusive revogadas e fora da vigência, com paginação.
+  Resposta: pessoa, permissoes, total, pagina, limite.
+
+PUT /pessoas/<pessoa_id>/permissoes/<local_id>
+  Cria ou atualiza uma permissão. Resposta permissao; 201 criada, 200 existente.
+  Corpo JSON não vazio, somente inicio, expiracao e revogada.
+  Datas aceitam ISO 8601 COM fuso, ou null para retirar um limite.
+  revogada exige booleano; nenhum campo de pessoa, perfil ou RFID é aceito.
+  Campos omitidos preservam o valor existente.
+  Para conceder sem prazo: {"revogada":false}.
+  Para criar uma permissão agendada: {"inicio":"2026-12-01T09:00:00-03:00"}.
+  Alterar uma data não reativa uma permissão revogada. A reativação exige
+  revogada:false explícito ou reinclusão explícita na edição de locais do
+  visitante, conforme a semântica aprovada de atribuição de locais.
+
+POST /pessoas/<pessoa_id>/permissoes/<local_id>/revogar
+  Revoga a permissão existente. Idempotente; não apaga a linha ou a pessoa.
+  Resposta permissao. Retorna 404 se o vínculo não existe.
+
+GET /locais/<local_id>/autorizacoes
+  Por padrão lista somente acessos efetivos: permissão vigente, pessoa ativa,
+  tag associada/cadastrada e validade global do visitante, quando aplicável.
+  situacao=todas inclui todas as permissões para administração.
+  situacao=vigente/agendada/expirada/revogada filtra a situação INDIVIDUAL.
+  Uma permissão individual vigente pode ter acesso_efetivo falso por causa
+  de credencial expirada, pessoa inativa ou tag ausente. Isso fica explícito.
+  Resposta: local, autorizacoes, total, pagina, limite.
+
+As duas listas usam pagina=1 e limite=25 como padrões, limite máximo 100.
+Filtros desconhecidos/repetidos e inteiros/offsets excessivos retornam 400.
+
+Cada permissão contém:
+  pessoa: id, nome, tipo_user, credencial_rfid, status_credencial,
+          inicio_credencial e expiracao_credencial;
+  local: id e endereco;
+  inicio, expiracao, revogada, situacao, acesso_efetivo.
+
+status_credencial usa a situação já existente do visitante (ativo/agendado/
+expirado/revogado). Comuns/Root usam ativo/inativo, ou sem_credencial quando
+não há tag registrada associada. Esses estados são derivados dos dados.
+Sem expiração global para comuns, os limites de credencial são null.
+Não são expostos senha, hash, e-mail ou segredos de autenticação.
+
+7. TRANSFERÊNCIA DO LEGADO — PREPARADA, NÃO EXECUTADA NO REAL
+
+Função: src.database.permission_legacy.copy_visitor_permissions(connection).
+
+Pré-condições: conexão SQLAlchemy deliberadamente fornecida pelo chamador,
+tabelas existentes e transação controlada por ele. A função não abre banco,
+não recebe URL, não cria tabelas, não faz commit e não altera o legado.
+Não existe chamada automática na inicialização ou fallback na autorização.
+
+Copia somente pares ausentes, com início/expiração individuais null e
+revogada=false. A validade global permanece no visitante. Copiar a validade
+global para cada linha individual impediria extensões futuras de funcionarem
+como antes, por isso isso não é feito.
+
+Se o par já existe, nenhuma data ou flag é sobrescrita. Uma permissão
+revogada não é reativada ao repetir a transferência. O chamador pode fazer
+rollback. A validação foi feita em SQLite isolado com FKs habilitadas.
+
+Não são inferidas permissões de usuários comuns a partir de RFID ou
+histórico. Elas precisam ser concedidas explicitamente por Root.
+
+8. COMPATIBILIDADE E LIMITAÇÕES
+
+POST /atribuir_rfid_usuario foi reutilizado sem alteração; continua Root,
+rejeitando UID pertencente a outra pessoa ou objeto. Não existe associação
+RFID paralela ou regra nova para patrimônio.
+
+User.credencial_rfid continua INTEGER, referenciando RFID.uid textual.
+A limitação herdada de apresentação de UIDs numéricas com zeros foi mantida;
+não houve normalização/regravação de UID. Os testes conferem o uso da UID
+original no firmware e a consulta administrativa dessa associação legada.
+
+POST /cadastrar_rfid continua validando mac_adress contra o cadastro do
+ESP32. A ponte MQTT, broker, tópicos, payloads e respostas foram preservados.
+Seu sucesso indica leitura processada, não decisão física de porta.
+
+/acessar_porta não recebia MAC e continua sem validá-lo, conforme a exceção
+aprovada. O MAC cadastrado é um identificador do protótipo e não autenticação
+forte contra falsificação. Não foram acrescentados tokens, certificados ou
+cabeçalhos obrigatórios para dispositivos.
+
+Os sketches legados têm divergências preexistentes de campos/tópicos MQTT.
+Nenhum firmware foi corrigido ou declarado compatível fisicamente nesta etapa.
+
+Histórico de pessoas comuns continua sem coluna de identidade/dispositivo
+histórica. Não foi inventado esse vínculo a partir do dono atual de uma UID.
+O vínculo histórico adicional de visitantes foi preservado.
+
+As dez falhas anteriores de login/logout/cadastro e tratamento global de
+erros continuam visíveis nos testes. Não houve correção incidental. Rotas
+que não correspondem a um endpoint continuam sujeitas ao handler original.
+
+9. TESTES E PRESERVAÇÃO
+
+Foram criados 93 casos novos: 83 em test_permissions.py e dez no módulo de
+modelos. Os cenários cobrem concessão Root, proibição para comuns/visitantes,
+negativa por ausência/revogação/expiração, pessoas e salas diferentes,
+credencial global de visitante, datas, estados, paginação, rollback, RFID,
+MAC no fluxo existente, herança numérica de UID e transferência do legado.
+
+Os testes antigos que esperavam liberação agora criam sua permissão
+explicitamente. Não houve concessão global na fixture de inventário nem
+enfraquecimento das verificações de resposta e histórico.
+
+As definições das oito classes não alteradas, da tabela antiga de locais
+dos visitantes e dos contratos fora do escopo foram comparadas. Arquivos de
+interface, dashboards, relatórios, autenticação, RFID, ESP32, MQTT, Docker,
+logger, requisitos e documentos anteriores continuaram idênticos.
+
+Nenhum teste utilizou banco real. A interface existente foi exercitada com
+57 cenários DOM, sem alterações em seus arquivos. MQTT/rede externa foram
+simulados; não houve ensaio de ESP32 físico ou operação em containers.
+
+10. RESULTADOS REAIS
+
+Pytest: 522 casos; 512 aprovados; 10 falhas preexistentes; 0 erros; 0 ignorados.
+Tempo: 26.79 s; avisos: 154. Retorno 1 pelas dez falhas conhecidas.
+93 casos novos aprovados, sem novas falhas na suíte completa.
+Os testes de esquema e de comum/Root foram renomeados para refletir as
+extensões aprovadas, mantendo suas verificações. Nenhum caso foi removido.
+Interface: 57 cenários DOM aprovados; não foi alterado o front-end nesta etapa.
+Não houve inspeção visual em navegador nesta etapa exclusivamente backend.
+
+Cobertura Python de instruções: 1265/1290 = 98.06%.
+Ramos: 305/318 = 95.91%.
+Combinada: 97.64%. Não é cobertura de JavaScript ou hardware.
+Cliente Flask: 537 requisições; média 9.008 ms; mediana 4.376 ms; P95 21.842 ms; máximo 127.82 ms.
+As medições são do cliente em processo, sem rede/ESP32/MQTT real.
+pip check: No broken requirements found. Nenhuma dependência foi instalada.
+
+11. CATÁLOGO DOS 522 CASOS PYTHON
+
+A duração JUnit pode incluir fixtures/setup/teardown e não equivale à
+medição de uma requisição HTTP. Os dez reprovados já estavam documentados.
+
+001. APROVADO | src.app.tests.test_access::test_fluxo_original_da_porta_e_historico[credencial_valida]
+     Duração JUnit: 1.363 s.
+002. APROVADO | src.app.tests.test_access::test_fluxo_original_da_porta_e_historico[conta_inativa]
+     Duração JUnit: 0.040 s.
+003. APROVADO | src.app.tests.test_access::test_fluxo_original_da_porta_e_historico[credencial_desconhecida]
+     Duração JUnit: 0.036 s.
+004. APROVADO | src.app.tests.test_access::test_porta_sem_local_valido_nao_cria_evento[payload0-400]
+     Duração JUnit: 0.033 s.
+005. APROVADO | src.app.tests.test_access::test_porta_sem_local_valido_nao_cria_evento[payload1-404]
+     Duração JUnit: 0.029 s.
+006. APROVADO | src.app.tests.test_access::test_porta_sem_local_valido_nao_cria_evento[payload2-404]
+     Duração JUnit: 0.030 s.
+007. APROVADO | src.app.tests.test_access::test_falha_ao_persistir_acesso_nao_abre_porta
+     Duração JUnit: 0.034 s.
+008. APROVADO | src.app.tests.test_auth::test_login_dinamico[credenciais_validas]
+     Duração JUnit: 0.141 s.
+009. APROVADO | src.app.tests.test_auth::test_login_dinamico[senha_incorreta]
+     Duração JUnit: 0.144 s.
+010. APROVADO | src.app.tests.test_auth::test_login_dinamico[outra_senha_incorreta]
+     Duração JUnit: 0.140 s.
+011. APROVADO | src.app.tests.test_auth::test_login_dinamico[usuario_inexistente]
+     Duração JUnit: 0.026 s.
+012. APROVADO | src.app.tests.test_auth::test_login_dinamico[email_vazio]
+     Duração JUnit: 0.027 s.
+013. APROVADO | src.app.tests.test_auth::test_login_emite_jwt_com_identidade_e_expiracao[root]
+     Duração JUnit: 0.143 s.
+014. APROVADO | src.app.tests.test_auth::test_login_emite_jwt_com_identidade_e_expiracao[user]
+     Duração JUnit: 0.145 s.
+015. APROVADO | src.app.tests.test_auth::test_cadastro_publico_preserva_contrato_e_armazena_hash
+     Duração JUnit: 0.368 s.
+016. APROVADO | src.app.tests.test_auth::test_cadastro_incompleto_nao_persiste[vazio]
+     Duração JUnit: 0.027 s.
+017. APROVADO | src.app.tests.test_auth::test_cadastro_incompleto_nao_persiste[somente_nome]
+     Duração JUnit: 0.022 s.
+018. APROVADO | src.app.tests.test_auth::test_cadastro_incompleto_nao_persiste[sem_senha]
+     Duração JUnit: 0.021 s.
+019. APROVADO | src.app.tests.test_auth::test_cadastro_incompleto_nao_persiste[sem_nome]
+     Duração JUnit: 0.021 s.
+020. REPROVADO | src.app.tests.test_auth::test_cadastro_email_duplicado_deve_retornar_400
+     Duração JUnit: 0.029 s.
+021. APROVADO | src.app.tests.test_auth::test_permissoes_administrativas_existentes[None-401-post-/registrar_root]
+     Duração JUnit: 0.026 s.
+022. APROVADO | src.app.tests.test_auth::test_permissoes_administrativas_existentes[None-401-post-/atribuir_rfid_usuario]
+     Duração JUnit: 0.026 s.
+023. APROVADO | src.app.tests.test_auth::test_permissoes_administrativas_existentes[None-401-get-/visualizar_todos_usuarios]
+     Duração JUnit: 0.026 s.
+024. APROVADO | src.app.tests.test_auth::test_permissoes_administrativas_existentes[None-401-post-/cadastrar_objeto]
+     Duração JUnit: 0.026 s.
+025. APROVADO | src.app.tests.test_auth::test_permissoes_administrativas_existentes[None-401-put-/recadastrar_objeto]
+     Duração JUnit: 0.028 s.
+026. APROVADO | src.app.tests.test_auth::test_permissoes_administrativas_existentes[None-401-delete-/excluir_objeto]
+     Duração JUnit: 0.026 s.
+027. APROVADO | src.app.tests.test_auth::test_permissoes_administrativas_existentes[None-401-post-/cadastrar_local]
+     Duração JUnit: 0.026 s.
+028. APROVADO | src.app.tests.test_auth::test_permissoes_administrativas_existentes[None-401-put-/editar_local]
+     Duração JUnit: 0.026 s.
+029. APROVADO | src.app.tests.test_auth::test_permissoes_administrativas_existentes[None-401-delete-/excluir_rfid]
+     Duração JUnit: 0.026 s.
+030. APROVADO | src.app.tests.test_auth::test_permissoes_administrativas_existentes[user-403-post-/registrar_root]
+     Duração JUnit: 0.029 s.
+031. APROVADO | src.app.tests.test_auth::test_permissoes_administrativas_existentes[user-403-post-/atribuir_rfid_usuario]
+     Duração JUnit: 0.028 s.
+032. APROVADO | src.app.tests.test_auth::test_permissoes_administrativas_existentes[user-403-get-/visualizar_todos_usuarios]
+     Duração JUnit: 0.028 s.
+033. APROVADO | src.app.tests.test_auth::test_permissoes_administrativas_existentes[user-403-post-/cadastrar_objeto]
+     Duração JUnit: 0.028 s.
+034. APROVADO | src.app.tests.test_auth::test_permissoes_administrativas_existentes[user-403-put-/recadastrar_objeto]
+     Duração JUnit: 0.028 s.
+035. APROVADO | src.app.tests.test_auth::test_permissoes_administrativas_existentes[user-403-delete-/excluir_objeto]
+     Duração JUnit: 0.028 s.
+036. APROVADO | src.app.tests.test_auth::test_permissoes_administrativas_existentes[user-403-post-/cadastrar_local]
+     Duração JUnit: 0.033 s.
+037. APROVADO | src.app.tests.test_auth::test_permissoes_administrativas_existentes[user-403-put-/editar_local]
+     Duração JUnit: 0.028 s.
+038. APROVADO | src.app.tests.test_auth::test_permissoes_administrativas_existentes[user-403-delete-/excluir_rfid]
+     Duração JUnit: 0.028 s.
+039. APROVADO | src.app.tests.test_auth::test_jwt_invalido_nao_acessa_rota_protegida[expired-401]
+     Duração JUnit: 0.025 s.
+040. APROVADO | src.app.tests.test_auth::test_jwt_invalido_nao_acessa_rota_protegida[malformed-422]
+     Duração JUnit: 0.023 s.
+041. APROVADO | src.app.tests.test_auth::test_jwt_invalido_nao_acessa_rota_protegida[wrong_signature-422]
+     Duração JUnit: 0.025 s.
+042. APROVADO | src.app.tests.test_auth::test_jwt_invalido_nao_acessa_rota_protegida[refresh-422]
+     Duração JUnit: 0.025 s.
+043. APROVADO | src.app.tests.test_auth::test_callback_existente_rejeita_jti_na_blocklist_da_aplicacao
+     Duração JUnit: 0.025 s.
+044. APROVADO | src.app.tests.test_auth::test_logout_registra_jti_no_conjunto_da_rota
+     Duração JUnit: 0.027 s.
+045. REPROVADO | src.app.tests.test_auth::test_token_deve_ser_rejeitado_apos_logout
+     Duração JUnit: 0.030 s.
+046. REPROVADO | src.app.tests.test_auth::test_root_pode_cadastrar_outro_root_valido
+     Duração JUnit: 0.151 s.
+047. APROVADO | src.app.tests.test_auth::test_associacao_usuario_rfid_rejeita_conflitos[payload0-400]
+     Duração JUnit: 0.033 s.
+048. APROVADO | src.app.tests.test_auth::test_associacao_usuario_rfid_rejeita_conflitos[payload1-404]
+     Duração JUnit: 0.034 s.
+049. APROVADO | src.app.tests.test_auth::test_associacao_usuario_rfid_rejeita_conflitos[payload2-404]
+     Duração JUnit: 0.033 s.
+050. APROVADO | src.app.tests.test_auth::test_associacao_usuario_rfid_rejeita_conflitos[payload3-409]
+     Duração JUnit: 0.036 s.
+051. APROVADO | src.app.tests.test_auth::test_associacao_usuario_rfid_rejeita_conflitos[payload4-409]
+     Duração JUnit: 0.035 s.
+052. APROVADO | src.app.tests.test_auth::test_associacao_usuario_rfid_rejeita_conflitos[payload5-404]
+     Duração JUnit: 0.033 s.
+053. APROVADO | src.app.tests.test_auth::test_associacao_usuario_rfid_valida
+     Duração JUnit: 0.040 s.
+054. APROVADO | src.app.tests.test_auth::test_consulta_usuarios_root_nao_retorna_hashes
+     Duração JUnit: 0.030 s.
+055. APROVADO | src.app.tests.test_auth::test_busca_usuario_por_uid_preserva_rota_publica[c3d4e5f6-200]
+     Duração JUnit: 0.029 s.
+056. APROVADO | src.app.tests.test_auth::test_busca_usuario_por_uid_preserva_rota_publica[inexistente-404]
+     Duração JUnit: 0.028 s.
+057. APROVADO | src.app.tests.test_dashboards::test_relatorios_exigem_root[None-401-/api/dashboards/resumo]
+     Duração JUnit: 0.044 s.
+058. APROVADO | src.app.tests.test_dashboards::test_relatorios_exigem_root[None-401-/api/relatorios/acessos]
+     Duração JUnit: 0.038 s.
+059. APROVADO | src.app.tests.test_dashboards::test_relatorios_exigem_root[None-401-/api/relatorios/acessos.csv]
+     Duração JUnit: 0.037 s.
+060. APROVADO | src.app.tests.test_dashboards::test_relatorios_exigem_root[None-401-/api/relatorios/atividades]
+     Duração JUnit: 0.037 s.
+061. APROVADO | src.app.tests.test_dashboards::test_relatorios_exigem_root[user-403-/api/dashboards/resumo]
+     Duração JUnit: 0.038 s.
+062. APROVADO | src.app.tests.test_dashboards::test_relatorios_exigem_root[user-403-/api/relatorios/acessos]
+     Duração JUnit: 0.038 s.
+063. APROVADO | src.app.tests.test_dashboards::test_relatorios_exigem_root[user-403-/api/relatorios/acessos.csv]
+     Duração JUnit: 0.045 s.
+064. APROVADO | src.app.tests.test_dashboards::test_relatorios_exigem_root[user-403-/api/relatorios/atividades]
+     Duração JUnit: 0.038 s.
+065. APROVADO | src.app.tests.test_dashboards::test_relatorios_exigem_root[visitante-403-/api/dashboards/resumo]
+     Duração JUnit: 0.039 s.
+066. APROVADO | src.app.tests.test_dashboards::test_relatorios_exigem_root[visitante-403-/api/relatorios/acessos]
+     Duração JUnit: 0.039 s.
+067. APROVADO | src.app.tests.test_dashboards::test_relatorios_exigem_root[visitante-403-/api/relatorios/acessos.csv]
+     Duração JUnit: 0.039 s.
+068. APROVADO | src.app.tests.test_dashboards::test_relatorios_exigem_root[visitante-403-/api/relatorios/atividades]
+     Duração JUnit: 0.039 s.
+069. APROVADO | src.app.tests.test_dashboards::test_token_sem_usuario_cadastrado_nao_acessa_relatorios[/api/dashboards/resumo]
+     Duração JUnit: 0.022 s.
+070. APROVADO | src.app.tests.test_dashboards::test_token_sem_usuario_cadastrado_nao_acessa_relatorios[/api/relatorios/acessos]
+     Duração JUnit: 0.022 s.
+071. APROVADO | src.app.tests.test_dashboards::test_token_sem_usuario_cadastrado_nao_acessa_relatorios[/api/relatorios/acessos.csv]
+     Duração JUnit: 0.022 s.
+072. APROVADO | src.app.tests.test_dashboards::test_token_sem_usuario_cadastrado_nao_acessa_relatorios[/api/relatorios/atividades]
+     Duração JUnit: 0.022 s.
+073. APROVADO | src.app.tests.test_dashboards::test_resumo_sem_eventos_diferencia_zero_de_indicador_indisponivel
+     Duração JUnit: 0.065 s.
+074. APROVADO | src.app.tests.test_dashboards::test_resumo_conta_eventos_e_situacoes_de_visitantes_sem_sobreposicao
+     Duração JUnit: 0.078 s.
+075. APROVADO | src.app.tests.test_dashboards::test_filtros_coerentes_no_resumo_json_e_csv[filters0-ids0-counts0]
+     Duração JUnit: 0.104 s.
+076. APROVADO | src.app.tests.test_dashboards::test_filtros_coerentes_no_resumo_json_e_csv[filters1-ids1-counts1]
+     Duração JUnit: 0.086 s.
+077. APROVADO | src.app.tests.test_dashboards::test_filtros_coerentes_no_resumo_json_e_csv[filters2-ids2-counts2]
+     Duração JUnit: 0.103 s.
+078. APROVADO | src.app.tests.test_dashboards::test_filtros_coerentes_no_resumo_json_e_csv[filters3-ids3-counts3]
+     Duração JUnit: 0.101 s.
+079. APROVADO | src.app.tests.test_dashboards::test_filtros_coerentes_no_resumo_json_e_csv[filters4-ids4-counts4]
+     Duração JUnit: 0.100 s.
+080. APROVADO | src.app.tests.test_dashboards::test_filtros_coerentes_no_resumo_json_e_csv[filters5-ids5-counts5]
+     Duração JUnit: 0.090 s.
+081. APROVADO | src.app.tests.test_dashboards::test_filtros_coerentes_no_resumo_json_e_csv[filters6-ids6-counts6]
+     Duração JUnit: 0.101 s.
+082. APROVADO | src.app.tests.test_dashboards::test_filtros_coerentes_no_resumo_json_e_csv[filters7-ids7-counts7]
+     Duração JUnit: 0.101 s.
+083. APROVADO | src.app.tests.test_dashboards::test_filtros_coerentes_no_resumo_json_e_csv[filters8-ids8-counts8]
+     Duração JUnit: 0.102 s.
+084. APROVADO | src.app.tests.test_dashboards::test_filtros_coerentes_no_resumo_json_e_csv[filters9-ids9-counts9]
+     Duração JUnit: 0.102 s.
+085. APROVADO | src.app.tests.test_dashboards::test_filtros_coerentes_no_resumo_json_e_csv[filters10-ids10-counts10]
+     Duração JUnit: 0.085 s.
+086. APROVADO | src.app.tests.test_dashboards::test_filtros_coerentes_no_resumo_json_e_csv[filters11-ids11-counts11]
+     Duração JUnit: 0.086 s.
+087. APROVADO | src.app.tests.test_dashboards::test_filtro_de_data_informa_fim_exclusivo_utc
+     Duração JUnit: 0.030 s.
+088. APROVADO | src.app.tests.test_dashboards::test_relatorio_rejeita_filtros_invalidos_com_400_sem_gravar[params0]
+     Duração JUnit: 0.036 s.
+089. APROVADO | src.app.tests.test_dashboards::test_relatorio_rejeita_filtros_invalidos_com_400_sem_gravar[params1]
+     Duração JUnit: 0.030 s.
+090. APROVADO | src.app.tests.test_dashboards::test_relatorio_rejeita_filtros_invalidos_com_400_sem_gravar[params2]
+     Duração JUnit: 0.029 s.
+091. APROVADO | src.app.tests.test_dashboards::test_relatorio_rejeita_filtros_invalidos_com_400_sem_gravar[params3]
+     Duração JUnit: 0.029 s.
+092. APROVADO | src.app.tests.test_dashboards::test_relatorio_rejeita_filtros_invalidos_com_400_sem_gravar[params4]
+     Duração JUnit: 0.029 s.
+093. APROVADO | src.app.tests.test_dashboards::test_relatorio_rejeita_filtros_invalidos_com_400_sem_gravar[params5]
+     Duração JUnit: 0.030 s.
+094. APROVADO | src.app.tests.test_dashboards::test_relatorio_rejeita_filtros_invalidos_com_400_sem_gravar[params6]
+     Duração JUnit: 0.029 s.
+095. APROVADO | src.app.tests.test_dashboards::test_relatorio_rejeita_filtros_invalidos_com_400_sem_gravar[params7]
+     Duração JUnit: 0.029 s.
+096. APROVADO | src.app.tests.test_dashboards::test_relatorio_rejeita_filtros_invalidos_com_400_sem_gravar[params8]
+     Duração JUnit: 0.029 s.
+097. APROVADO | src.app.tests.test_dashboards::test_relatorio_rejeita_filtros_invalidos_com_400_sem_gravar[params9]
+     Duração JUnit: 0.029 s.
+098. APROVADO | src.app.tests.test_dashboards::test_relatorio_rejeita_filtros_invalidos_com_400_sem_gravar[params10]
+     Duração JUnit: 0.030 s.
+099. APROVADO | src.app.tests.test_dashboards::test_relatorio_rejeita_filtros_invalidos_com_400_sem_gravar[params11]
+     Duração JUnit: 0.034 s.
+100. APROVADO | src.app.tests.test_dashboards::test_relatorio_rejeita_filtros_invalidos_com_400_sem_gravar[params12]
+     Duração JUnit: 0.030 s.
+101. APROVADO | src.app.tests.test_dashboards::test_relatorio_rejeita_filtros_invalidos_com_400_sem_gravar[params13]
+     Duração JUnit: 0.029 s.
+102. APROVADO | src.app.tests.test_dashboards::test_relatorio_rejeita_filtros_invalidos_com_400_sem_gravar[params14]
+     Duração JUnit: 0.029 s.
+103. APROVADO | src.app.tests.test_dashboards::test_relatorio_rejeita_filtros_invalidos_com_400_sem_gravar[params15]
+     Duração JUnit: 0.029 s.
+104. APROVADO | src.app.tests.test_dashboards::test_relatorio_rejeita_filtros_invalidos_com_400_sem_gravar[params16]
+     Duração JUnit: 0.030 s.
+105. APROVADO | src.app.tests.test_dashboards::test_relatorio_rejeita_filtros_invalidos_com_400_sem_gravar[params17]
+     Duração JUnit: 0.029 s.
+106. APROVADO | src.app.tests.test_dashboards::test_relatorio_rejeita_filtros_invalidos_com_400_sem_gravar[params18]
+     Duração JUnit: 0.029 s.
+107. APROVADO | src.app.tests.test_dashboards::test_relatorio_rejeita_filtros_invalidos_com_400_sem_gravar[params19]
+     Duração JUnit: 0.030 s.
+108. APROVADO | src.app.tests.test_dashboards::test_relatorio_rejeita_filtros_invalidos_com_400_sem_gravar[params20]
+     Duração JUnit: 0.029 s.
+109. APROVADO | src.app.tests.test_dashboards::test_relatorio_rejeita_filtros_invalidos_com_400_sem_gravar[params21]
+     Duração JUnit: 0.030 s.
+110. APROVADO | src.app.tests.test_dashboards::test_relatorio_rejeita_filtros_invalidos_com_400_sem_gravar[params22]
+     Duração JUnit: 0.030 s.
+111. APROVADO | src.app.tests.test_dashboards::test_relatorio_rejeita_filtros_invalidos_com_400_sem_gravar[params23]
+     Duração JUnit: 0.029 s.
+112. APROVADO | src.app.tests.test_dashboards::test_relatorio_rejeita_filtros_invalidos_com_400_sem_gravar[params24]
+     Duração JUnit: 0.029 s.
+113. APROVADO | src.app.tests.test_dashboards::test_relatorio_rejeita_filtros_invalidos_com_400_sem_gravar[params25]
+     Duração JUnit: 0.029 s.
+114. APROVADO | src.app.tests.test_dashboards::test_relatorio_rejeita_filtros_invalidos_com_400_sem_gravar[params26]
+     Duração JUnit: 0.029 s.
+115. APROVADO | src.app.tests.test_dashboards::test_relatorio_rejeita_filtros_invalidos_com_400_sem_gravar[params27]
+     Duração JUnit: 0.031 s.
+116. APROVADO | src.app.tests.test_dashboards::test_relatorio_rejeita_filtros_invalidos_com_400_sem_gravar[params28]
+     Duração JUnit: 0.029 s.
+117. APROVADO | src.app.tests.test_dashboards::test_validacao_dos_novos_endpoints_preserva_http_400[/api/dashboards/resumo]
+     Duração JUnit: 0.028 s.
+118. APROVADO | src.app.tests.test_dashboards::test_validacao_dos_novos_endpoints_preserva_http_400[/api/relatorios/acessos]
+     Duração JUnit: 0.029 s.
+119. APROVADO | src.app.tests.test_dashboards::test_validacao_dos_novos_endpoints_preserva_http_400[/api/relatorios/acessos.csv]
+     Duração JUnit: 0.028 s.
+120. APROVADO | src.app.tests.test_dashboards::test_validacao_dos_novos_endpoints_preserva_http_400[/api/relatorios/atividades]
+     Duração JUnit: 0.029 s.
+121. APROVADO | src.app.tests.test_dashboards::test_paginacao_estavel_e_pagina_vazia_preservam_total
+     Duração JUnit: 0.074 s.
+122. APROVADO | src.app.tests.test_dashboards::test_nome_de_visitante_depende_do_vinculo_do_evento_e_nao_do_dono_atual_da_tag
+     Duração JUnit: 0.076 s.
+123. APROVADO | src.app.tests.test_dashboards::test_registro_com_local_ausente_continua_no_relatorio
+     Duração JUnit: 0.046 s.
+124. APROVADO | src.app.tests.test_dashboards::test_evolucao_informa_limite_sem_truncar_totais
+     Duração JUnit: 0.186 s.
+125. APROVADO | src.app.tests.test_dashboards::test_ranking_limita_dez_salas_e_conta_somente_liberados
+     Duração JUnit: 0.062 s.
+126. APROVADO | src.app.tests.test_dashboards::test_atividades_filtram_consultas_reais_sem_inferir_movimentacao[params0-ids0]
+     Duração JUnit: 0.069 s.
+127. APROVADO | src.app.tests.test_dashboards::test_atividades_filtram_consultas_reais_sem_inferir_movimentacao[params1-ids1]
+     Duração JUnit: 0.070 s.
+128. APROVADO | src.app.tests.test_dashboards::test_atividades_filtram_consultas_reais_sem_inferir_movimentacao[params2-ids2]
+     Duração JUnit: 0.064 s.
+129. APROVADO | src.app.tests.test_dashboards::test_atividades_filtram_consultas_reais_sem_inferir_movimentacao[params3-ids3]
+     Duração JUnit: 0.069 s.
+130. APROVADO | src.app.tests.test_dashboards::test_atividades_filtram_consultas_reais_sem_inferir_movimentacao[params4-ids4]
+     Duração JUnit: 0.069 s.
+131. APROVADO | src.app.tests.test_dashboards::test_atividades_filtram_consultas_reais_sem_inferir_movimentacao[params5-ids5]
+     Duração JUnit: 0.070 s.
+132. APROVADO | src.app.tests.test_dashboards::test_atividades_filtram_consultas_reais_sem_inferir_movimentacao[params6-ids6]
+     Duração JUnit: 0.065 s.
+133. APROVADO | src.app.tests.test_dashboards::test_atividades_filtram_consultas_reais_sem_inferir_movimentacao[params7-ids7]
+     Duração JUnit: 0.064 s.
+134. APROVADO | src.app.tests.test_dashboards::test_atividades_filtram_consultas_reais_sem_inferir_movimentacao[params8-ids8]
+     Duração JUnit: 0.066 s.
+135. APROVADO | src.app.tests.test_dashboards::test_atividades_rejeitam_filtros_sem_significado_nessa_fonte[params0]
+     Duração JUnit: 0.028 s.
+136. APROVADO | src.app.tests.test_dashboards::test_atividades_rejeitam_filtros_sem_significado_nessa_fonte[params1]
+     Duração JUnit: 0.028 s.
+137. APROVADO | src.app.tests.test_dashboards::test_atividades_rejeitam_filtros_sem_significado_nessa_fonte[params2]
+     Duração JUnit: 0.028 s.
+138. APROVADO | src.app.tests.test_dashboards::test_atividades_rejeitam_filtros_sem_significado_nessa_fonte[params3]
+     Duração JUnit: 0.028 s.
+139. APROVADO | src.app.tests.test_dashboards::test_atividades_rejeitam_filtros_sem_significado_nessa_fonte[params4]
+     Duração JUnit: 0.028 s.
+140. APROVADO | src.app.tests.test_dashboards::test_atividades_rejeitam_filtros_sem_significado_nessa_fonte[params5]
+     Duração JUnit: 0.028 s.
+141. APROVADO | src.app.tests.test_dashboards::test_atividades_rejeitam_filtros_sem_significado_nessa_fonte[params6]
+     Duração JUnit: 0.028 s.
+142. APROVADO | src.app.tests.test_dashboards::test_atividades_rejeitam_filtros_sem_significado_nessa_fonte[params7]
+     Duração JUnit: 0.028 s.
+143. APROVADO | src.app.tests.test_dashboards::test_resumo_filtra_atividades_apenas_por_periodo
+     Duração JUnit: 0.089 s.
+144. APROVADO | src.app.tests.test_dashboards::test_busca_original_de_objeto_aparece_como_consulta_no_resumo
+     Duração JUnit: 0.049 s.
+145. APROVADO | src.app.tests.test_dashboards::test_leitura_http_com_mac_nao_vira_acesso_ou_retirada
+     Duração JUnit: 0.051 s.
+146. APROVADO | src.app.tests.test_dashboards::test_eventos_da_porta_original_alimentam_resumo_e_vinculo_visitante
+     Duração JUnit: 0.080 s.
+147. APROVADO | src.app.tests.test_dashboards::test_csv_neutraliza_formulas_sem_modificar_cadastro[=1+1]
+     Duração JUnit: 0.072 s.
+148. APROVADO | src.app.tests.test_dashboards::test_csv_neutraliza_formulas_sem_modificar_cadastro[+1+1]
+     Duração JUnit: 0.070 s.
+149. APROVADO | src.app.tests.test_dashboards::test_csv_neutraliza_formulas_sem_modificar_cadastro[-1+1]
+     Duração JUnit: 0.071 s.
+150. APROVADO | src.app.tests.test_dashboards::test_csv_neutraliza_formulas_sem_modificar_cadastro[@SOMA(1)]
+     Duração JUnit: 0.070 s.
+151. APROVADO | src.app.tests.test_dashboards::test_csv_neutraliza_formulas_sem_modificar_cadastro[  =1+1]
+     Duração JUnit: 0.070 s.
+152. APROVADO | src.app.tests.test_dashboards::test_csv_neutraliza_formulas_sem_modificar_cadastro[\ttexto]
+     Duração JUnit: 0.070 s.
+153. APROVADO | src.app.tests.test_dashboards::test_csv_neutraliza_formulas_sem_modificar_cadastro[\rtexto]
+     Duração JUnit: 0.072 s.
+154. APROVADO | src.app.tests.test_dashboards::test_csv_neutraliza_formulas_sem_modificar_cadastro[\ntexto]
+     Duração JUnit: 0.070 s.
+155. APROVADO | src.app.tests.test_dashboards::test_csv_preserva_acentos_separadores_e_quebras_de_linha
+     Duração JUnit: 0.069 s.
+156. APROVADO | src.app.tests.test_dashboards::test_csv_exige_restringir_filtros_quando_ultrapassa_limite
+     Duração JUnit: 0.067 s.
+157. APROVADO | src.app.tests.test_dashboards::test_consultas_administrativas_nao_inserem_eventos_ou_alteram_cadastros[/api/dashboards/resumo]
+     Duração JUnit: 0.086 s.
+158. APROVADO | src.app.tests.test_dashboards::test_consultas_administrativas_nao_inserem_eventos_ou_alteram_cadastros[/api/relatorios/acessos]
+     Duração JUnit: 0.073 s.
+159. APROVADO | src.app.tests.test_dashboards::test_consultas_administrativas_nao_inserem_eventos_ou_alteram_cadastros[/api/relatorios/acessos.csv]
+     Duração JUnit: 0.069 s.
+160. APROVADO | src.app.tests.test_dashboards::test_consultas_administrativas_nao_inserem_eventos_ou_alteram_cadastros[/api/relatorios/atividades]
+     Duração JUnit: 0.069 s.
+161. APROVADO | src.app.tests.test_dashboards::test_erro_sql_nos_novos_relatorios_e_generico_sem_expor_consulta[/api/dashboards/resumo-dashboard_summary]
+     Duração JUnit: 0.033 s.
+162. APROVADO | src.app.tests.test_dashboards::test_erro_sql_nos_novos_relatorios_e_generico_sem_expor_consulta[/api/relatorios/acessos-access_query]
+     Duração JUnit: 0.029 s.
+163. APROVADO | src.app.tests.test_dashboards::test_erro_sql_nos_novos_relatorios_e_generico_sem_expor_consulta[/api/relatorios/acessos.csv-access_query]
+     Duração JUnit: 0.029 s.
+164. APROVADO | src.app.tests.test_dashboards::test_erro_sql_nos_novos_relatorios_e_generico_sem_expor_consulta[/api/relatorios/atividades-activity_query]
+     Duração JUnit: 0.030 s.
+165. APROVADO | src.app.tests.test_frontend::test_template_preserva_modulos_e_oculta_novos_acessos_antes_do_login
+     Duração JUnit: 0.064 s.
+166. APROVADO | src.app.tests.test_frontend::test_assets_da_interface_sao_servidos_pelo_flask_existente[admin.js-text/javascript]
+     Duração JUnit: 0.028 s.
+167. APROVADO | src.app.tests.test_frontend::test_assets_da_interface_sao_servidos_pelo_flask_existente[admin.css-text/css]
+     Duração JUnit: 0.021 s.
+168. APROVADO | src.app.tests.test_frontend::test_contratos_reais_disponiveis_para_o_frontend_sem_alterar_rotas
+     Duração JUnit: 0.139 s.
+169. APROVADO | src.app.tests.test_http::test_pagina_inicial_preserva_template_e_javascript
+     Duração JUnit: 0.021 s.
+170. REPROVADO | src.app.tests.test_http::test_erros_http_preservam_status_original[get-/rota-inexistente-404]
+     Duração JUnit: 0.022 s.
+171. REPROVADO | src.app.tests.test_http::test_erros_http_preservam_status_original[get-/login-405]
+     Duração JUnit: 0.023 s.
+172. REPROVADO | src.app.tests.test_http::test_erros_de_parse_json_preservam_status[json_malformado]
+     Duração JUnit: 0.023 s.
+173. REPROVADO | src.app.tests.test_http::test_erros_de_parse_json_preservam_status[content_type_incorreto]
+     Duração JUnit: 0.021 s.
+174. APROVADO | src.app.tests.test_http::test_excecao_inesperada_retorna_resposta_generica
+     Duração JUnit: 0.022 s.
+175. APROVADO | src.app.tests.test_http::test_falha_de_banco_no_cadastro_retorna_500
+     Duração JUnit: 0.138 s.
+176. APROVADO | src.app.tests.test_http::test_logger_original_preserva_mensagem_e_arquivos_temporarios
+     Duração JUnit: 0.022 s.
+177. APROVADO | src.app.tests.test_http::test_bootstrap_esta_isolado_em_memoria
+     Duração JUnit: 0.019 s.
+178. APROVADO | src.app.tests.test_http::test_bloqueios_impedem_acesso_externo[sqlite]
+     Duração JUnit: 0.019 s.
+179. APROVADO | src.app.tests.test_http::test_bloqueios_impedem_acesso_externo[sqlite_uri]
+     Duração JUnit: 0.019 s.
+180. APROVADO | src.app.tests.test_http::test_bloqueios_impedem_acesso_externo[socket]
+     Duração JUnit: 0.019 s.
+181. APROVADO | src.app.tests.test_http::test_bloqueios_impedem_acesso_externo[dns]
+     Duração JUnit: 0.024 s.
+182. APROVADO | src.app.tests.test_http::test_bloqueios_impedem_acesso_externo[upload]
+     Duração JUnit: 0.019 s.
+183. APROVADO | src.app.tests.test_inventory::test_cadastro_objeto_e_imagem_no_diretorio_temporario
+     Duração JUnit: 0.055 s.
+184. APROVADO | src.app.tests.test_inventory::test_cadastro_objeto_rejeita_campos_obrigatorios_ausentes[nome]
+     Duração JUnit: 0.044 s.
+185. APROVADO | src.app.tests.test_inventory::test_cadastro_objeto_rejeita_campos_obrigatorios_ausentes[descricao]
+     Duração JUnit: 0.044 s.
+186. APROVADO | src.app.tests.test_inventory::test_cadastro_objeto_rejeita_campos_obrigatorios_ausentes[local]
+     Duração JUnit: 0.043 s.
+187. APROVADO | src.app.tests.test_inventory::test_cadastro_objeto_rejeita_campos_obrigatorios_ausentes[uid_recebido]
+     Duração JUnit: 0.043 s.
+188. APROVADO | src.app.tests.test_inventory::test_cadastro_objeto_rejeita_campos_obrigatorios_ausentes[imagem]
+     Duração JUnit: 0.033 s.
+189. APROVADO | src.app.tests.test_inventory::test_cadastro_objeto_rejeita_referencias_inexistentes[changes0]
+     Duração JUnit: 0.044 s.
+190. APROVADO | src.app.tests.test_inventory::test_cadastro_objeto_rejeita_referencias_inexistentes[changes1]
+     Duração JUnit: 0.044 s.
+191. APROVADO | src.app.tests.test_inventory::test_nome_do_upload_e_sanitizado
+     Duração JUnit: 0.046 s.
+192. APROVADO | src.app.tests.test_inventory::test_recadastro_objeto_rejeita_entradas_e_conflitos[payload0-400]
+     Duração JUnit: 0.032 s.
+193. APROVADO | src.app.tests.test_inventory::test_recadastro_objeto_rejeita_entradas_e_conflitos[payload1-404]
+     Duração JUnit: 0.033 s.
+194. APROVADO | src.app.tests.test_inventory::test_recadastro_objeto_rejeita_entradas_e_conflitos[payload2-404]
+     Duração JUnit: 0.033 s.
+195. APROVADO | src.app.tests.test_inventory::test_recadastro_objeto_rejeita_entradas_e_conflitos[payload3-400]
+     Duração JUnit: 0.034 s.
+196. APROVADO | src.app.tests.test_inventory::test_recadastro_objeto_atualiza_uid
+     Duração JUnit: 0.039 s.
+197. APROVADO | src.app.tests.test_inventory::test_exclusao_objeto[payload0-400-1]
+     Duração JUnit: 0.035 s.
+198. APROVADO | src.app.tests.test_inventory::test_exclusao_objeto[payload1-404-1]
+     Duração JUnit: 0.033 s.
+199. APROVADO | src.app.tests.test_inventory::test_exclusao_objeto[payload2-200-0]
+     Duração JUnit: 0.035 s.
+200. APROVADO | src.app.tests.test_inventory::test_inventario_disponivel_aos_perfis_existentes[root]
+     Duração JUnit: 0.032 s.
+201. APROVADO | src.app.tests.test_inventory::test_inventario_disponivel_aos_perfis_existentes[user]
+     Duração JUnit: 0.032 s.
+202. APROVADO | src.app.tests.test_inventory::test_inventario_exige_jwt
+     Duração JUnit: 0.020 s.
+203. APROVADO | src.app.tests.test_inventory::test_consultas_publicas_preservam_historico[/buscar_objeto_id/1-200-buscar_objeto_id-sucesso]
+     Duração JUnit: 0.032 s.
+204. APROVADO | src.app.tests.test_inventory::test_consultas_publicas_preservam_historico[/buscar_objeto_id/999-404-buscar_objeto_id-falha]
+     Duração JUnit: 0.030 s.
+205. APROVADO | src.app.tests.test_inventory::test_consultas_publicas_preservam_historico[/buscar_objeto_uid/a1b2c3d4-200-buscar_objeto_uid-sucesso]
+     Duração JUnit: 0.032 s.
+206. APROVADO | src.app.tests.test_inventory::test_consultas_publicas_preservam_historico[/buscar_objeto_uid/inexistente-404-buscar_objeto_uid-falha]
+     Duração JUnit: 0.030 s.
+207. APROVADO | src.app.tests.test_inventory::test_busca_objeto_por_nome[Notebook-200]
+     Duração JUnit: 0.030 s.
+208. APROVADO | src.app.tests.test_inventory::test_busca_objeto_por_nome[book-200]
+     Duração JUnit: 0.029 s.
+209. APROVADO | src.app.tests.test_inventory::test_busca_objeto_por_nome[INEXISTENTE-404]
+     Duração JUnit: 0.034 s.
+210. APROVADO | src.app.tests.test_inventory::test_cadastro_e_edicao_de_local
+     Duração JUnit: 0.042 s.
+211. APROVADO | src.app.tests.test_inventory::test_locais_rejeitam_corpo_vazio_ou_id_inexistente[post-/cadastrar_local-payload0-400]
+     Duração JUnit: 0.032 s.
+212. APROVADO | src.app.tests.test_inventory::test_locais_rejeitam_corpo_vazio_ou_id_inexistente[put-/editar_local-payload1-400]
+     Duração JUnit: 0.032 s.
+213. APROVADO | src.app.tests.test_inventory::test_locais_rejeitam_corpo_vazio_ou_id_inexistente[put-/editar_local-payload2-404]
+     Duração JUnit: 0.033 s.
+214. REPROVADO | src.app.tests.test_inventory::test_local_incompleto_deve_ser_rejeitado_com_400[endereco]
+     Duração JUnit: 0.029 s.
+215. REPROVADO | src.app.tests.test_inventory::test_local_incompleto_deve_ser_rejeitado_com_400[descricao]
+     Duração JUnit: 0.029 s.
+216. REPROVADO | src.app.tests.test_inventory::test_local_incompleto_deve_ser_rejeitado_com_400[responsavel]
+     Duração JUnit: 0.029 s.
+217. APROVADO | src.app.tests.test_inventory::test_listagem_publica_de_locais
+     Duração JUnit: 0.027 s.
+218. APROVADO | src.app.tests.test_inventory::test_cadastro_esp32_preserva_mac_e_local_sem_token
+     Duração JUnit: 0.030 s.
+219. APROVADO | src.app.tests.test_inventory::test_cadastro_esp32_rejeita_campos_ausentes[payload0]
+     Duração JUnit: 0.023 s.
+220. APROVADO | src.app.tests.test_inventory::test_cadastro_esp32_rejeita_campos_ausentes[payload1]
+     Duração JUnit: 0.022 s.
+221. APROVADO | src.app.tests.test_inventory::test_cadastro_esp32_rejeita_campos_ausentes[payload2]
+     Duração JUnit: 0.021 s.
+222. APROVADO | src.app.tests.test_inventory::test_esp32_duplicado_nao_persiste_novamente
+     Duração JUnit: 0.030 s.
+223. APROVADO | src.app.tests.test_inventory::test_leitura_http_autorizada_apenas_por_mac_cadastrado[d4e5f6a7-livre]
+     Duração JUnit: 0.036 s.
+224. APROVADO | src.app.tests.test_inventory::test_leitura_http_autorizada_apenas_por_mac_cadastrado[a1b2c3d4-objeto]
+     Duração JUnit: 0.032 s.
+225. APROVADO | src.app.tests.test_inventory::test_leitura_http_autorizada_apenas_por_mac_cadastrado[c3d4e5f6-usuario]
+     Duração JUnit: 0.033 s.
+226. APROVADO | src.app.tests.test_inventory::test_mac_nao_cadastrado_nao_autoriza_leitura[AA:BB:CC:DD:EE:99]
+     Duração JUnit: 0.030 s.
+227. APROVADO | src.app.tests.test_inventory::test_mac_nao_cadastrado_nao_autoriza_leitura[]
+     Duração JUnit: 0.029 s.
+228. APROVADO | src.app.tests.test_inventory::test_mac_nao_cadastrado_nao_autoriza_leitura[None]
+     Duração JUnit: 0.032 s.
+229. APROVADO | src.app.tests.test_inventory::test_leitura_idempotente_nao_duplica_tag
+     Duração JUnit: 0.036 s.
+230. APROVADO | src.app.tests.test_inventory::test_evento_socketio_real_em_processo_apos_leitura
+     Duração JUnit: 0.032 s.
+231. APROVADO | src.app.tests.test_inventory::test_rfid_corpo_vazio_retorna_400
+     Duração JUnit: 0.020 s.
+232. APROVADO | src.app.tests.test_inventory::test_listagem_rfid_publica_preserva_campos
+     Duração JUnit: 0.032 s.
+233. APROVADO | src.app.tests.test_inventory::test_consulta_rfid_por_uid[a1b2c3d4-200]
+     Duração JUnit: 0.028 s.
+234. APROVADO | src.app.tests.test_inventory::test_consulta_rfid_por_uid[inexistente-400]
+     Duração JUnit: 0.028 s.
+235. APROVADO | src.app.tests.test_inventory::test_exclusao_de_tag_livre_e_bloqueio_de_objeto[payload0-400-3]
+     Duração JUnit: 0.033 s.
+236. APROVADO | src.app.tests.test_inventory::test_exclusao_de_tag_livre_e_bloqueio_de_objeto[payload1-404-3]
+     Duração JUnit: 0.033 s.
+237. APROVADO | src.app.tests.test_inventory::test_exclusao_de_tag_livre_e_bloqueio_de_objeto[payload2-400-3]
+     Duração JUnit: 0.034 s.
+238. APROVADO | src.app.tests.test_inventory::test_exclusao_de_tag_livre_e_bloqueio_de_objeto[payload3-200-2]
+     Duração JUnit: 0.035 s.
+239. APROVADO | src.app.tests.test_inventory::test_falha_de_commit_nao_persiste_operacao[post-/cadastrar_local-payload0]
+     Duração JUnit: 0.035 s.
+240. APROVADO | src.app.tests.test_inventory::test_falha_de_commit_nao_persiste_operacao[put-/editar_local-payload1]
+     Duração JUnit: 0.042 s.
+241. APROVADO | src.app.tests.test_inventory::test_falha_de_commit_nao_persiste_operacao[post-/cadastrar_esp32-payload2]
+     Duração JUnit: 0.034 s.
+242. APROVADO | src.app.tests.test_inventory::test_falha_de_commit_nao_persiste_operacao[post-/atribuir_rfid_usuario-payload3]
+     Duração JUnit: 0.038 s.
+243. APROVADO | src.app.tests.test_inventory::test_falha_de_commit_nao_persiste_operacao[put-/recadastrar_objeto-payload4]
+     Duração JUnit: 0.038 s.
+244. APROVADO | src.app.tests.test_inventory::test_falha_de_commit_nao_persiste_operacao[delete-/excluir_objeto-payload5]
+     Duração JUnit: 0.036 s.
+245. APROVADO | src.app.tests.test_inventory::test_falha_de_commit_nao_persiste_operacao[delete-/excluir_rfid-payload6]
+     Duração JUnit: 0.037 s.
+246. APROVADO | src.app.tests.test_models::test_restricoes_declaradas_no_schema[email_unico]
+     Duração JUnit: 0.075 s.
+247. APROVADO | src.app.tests.test_models::test_restricoes_declaradas_no_schema[email_obrigatorio]
+     Duração JUnit: 0.060 s.
+248. APROVADO | src.app.tests.test_models::test_restricoes_declaradas_no_schema[senha_obrigatoria]
+     Duração JUnit: 0.060 s.
+249. APROVADO | src.app.tests.test_models::test_restricoes_declaradas_no_schema[credencial_unica]
+     Duração JUnit: 0.058 s.
+250. APROVADO | src.app.tests.test_models::test_restricoes_declaradas_no_schema[credencial_fk]
+     Duração JUnit: 0.057 s.
+251. APROVADO | src.app.tests.test_models::test_restricoes_declaradas_no_schema[uid_unica]
+     Duração JUnit: 0.059 s.
+252. APROVADO | src.app.tests.test_models::test_restricoes_declaradas_no_schema[data_obrigatoria]
+     Duração JUnit: 0.060 s.
+253. APROVADO | src.app.tests.test_models::test_restricoes_declaradas_no_schema[objeto_tag_unica]
+     Duração JUnit: 0.058 s.
+254. APROVADO | src.app.tests.test_models::test_restricoes_declaradas_no_schema[objeto_tag_fk]
+     Duração JUnit: 0.060 s.
+255. APROVADO | src.app.tests.test_models::test_restricoes_declaradas_no_schema[objeto_local_fk]
+     Duração JUnit: 0.060 s.
+256. APROVADO | src.app.tests.test_models::test_restricoes_declaradas_no_schema[mac_unico]
+     Duração JUnit: 0.058 s.
+257. APROVADO | src.app.tests.test_models::test_restricoes_declaradas_no_schema[dispositivo_local_fk]
+     Duração JUnit: 0.058 s.
+258. APROVADO | src.app.tests.test_models::test_restricoes_declaradas_no_schema[root_usuario_fk]
+     Duração JUnit: 0.063 s.
+259. APROVADO | src.app.tests.test_models::test_restricoes_declaradas_no_schema[root_senha_obrigatoria]
+     Duração JUnit: 0.059 s.
+260. APROVADO | src.app.tests.test_models::test_restricoes_declaradas_no_schema[acesso_tag_fk]
+     Duração JUnit: 0.058 s.
+261. APROVADO | src.app.tests.test_models::test_restricoes_declaradas_no_schema[acesso_local_fk]
+     Duração JUnit: 0.059 s.
+262. APROVADO | src.app.tests.test_models::test_restricoes_declaradas_no_schema[historico_objeto_fk]
+     Duração JUnit: 0.059 s.
+263. APROVADO | src.app.tests.test_models::test_restricoes_declaradas_no_schema[historico_usuario_fk]
+     Duração JUnit: 0.060 s.
+264. APROVADO | src.app.tests.test_models::test_referencias_opcionais_de_historico_aceitam_null
+     Duração JUnit: 0.059 s.
+265. APROVADO | src.app.tests.test_models::test_hierarquia_user_root_e_relacionamento_local
+     Duração JUnit: 0.028 s.
+266. APROVADO | src.app.tests.test_models::test_schema_original_com_as_extensoes_de_visitantes_e_permissoes_aprovadas
+     Duração JUnit: 0.018 s.
+267. APROVADO | src.app.tests.test_models::test_verificacao_fk_dos_modelos_nao_reconfigura_engine_da_api
+     Duração JUnit: 0.056 s.
+268. APROVADO | src.app.tests.test_models::test_integridade_da_permissao_individual[pessoa_ausente]
+     Duração JUnit: 0.057 s.
+269. APROVADO | src.app.tests.test_models::test_integridade_da_permissao_individual[local_ausente]
+     Duração JUnit: 0.057 s.
+270. APROVADO | src.app.tests.test_models::test_integridade_da_permissao_individual[duplicada]
+     Duração JUnit: 0.059 s.
+271. APROVADO | src.app.tests.test_models::test_integridade_da_permissao_individual[periodo_igual]
+     Duração JUnit: 0.056 s.
+272. APROVADO | src.app.tests.test_models::test_integridade_da_permissao_individual[periodo_invertido]
+     Duração JUnit: 0.059 s.
+273. APROVADO | src.app.tests.test_models::test_integridade_da_permissao_individual[revogada_nula]
+     Duração JUnit: 0.057 s.
+274. APROVADO | src.app.tests.test_models::test_integridade_da_permissao_individual[revogada_fora_do_dominio]
+     Duração JUnit: 0.057 s.
+275. APROVADO | src.app.tests.test_models::test_backfill_explicito_preserva_legado_e_nao_reaplica_limites_globais
+     Duração JUnit: 0.067 s.
+276. APROVADO | src.app.tests.test_models::test_backfill_nao_reativa_ou_sobrescreve_permissao_existente
+     Duração JUnit: 0.069 s.
+277. APROVADO | src.app.tests.test_models::test_backfill_nao_faz_commit_e_pode_ser_revertido_pelo_chamador
+     Duração JUnit: 0.063 s.
+278. APROVADO | src.app.tests.test_models::test_restricoes_das_tres_tabelas_de_visitante[visitante_sem_user]
+     Duração JUnit: 0.063 s.
+279. APROVADO | src.app.tests.test_models::test_restricoes_das_tres_tabelas_de_visitante[inicio_nulo]
+     Duração JUnit: 0.063 s.
+280. APROVADO | src.app.tests.test_models::test_restricoes_das_tres_tabelas_de_visitante[periodo_invertido]
+     Duração JUnit: 0.063 s.
+281. APROVADO | src.app.tests.test_models::test_restricoes_das_tres_tabelas_de_visitante[periodo_igual]
+     Duração JUnit: 0.063 s.
+282. APROVADO | src.app.tests.test_models::test_restricoes_das_tres_tabelas_de_visitante[local_inexistente]
+     Duração JUnit: 0.064 s.
+283. APROVADO | src.app.tests.test_models::test_restricoes_das_tres_tabelas_de_visitante[user_nao_visitante]
+     Duração JUnit: 0.065 s.
+284. APROVADO | src.app.tests.test_models::test_restricoes_das_tres_tabelas_de_visitante[local_duplicado]
+     Duração JUnit: 0.063 s.
+285. APROVADO | src.app.tests.test_models::test_restricoes_das_tres_tabelas_de_visitante[registro_inexistente]
+     Duração JUnit: 0.064 s.
+286. APROVADO | src.app.tests.test_models::test_restricoes_das_tres_tabelas_de_visitante[historico_user_nao_visitante]
+     Duração JUnit: 0.064 s.
+287. APROVADO | src.app.tests.test_models::test_restricoes_das_tres_tabelas_de_visitante[registro_duplicado]
+     Duração JUnit: 0.064 s.
+288. APROVADO | src.app.tests.test_mqtt::test_configuracao_original_de_broker_topicos_e_rota
+     Duração JUnit: 0.024 s.
+289. APROVADO | src.app.tests.test_mqtt::test_conexao_assina_topico_original
+     Duração JUnit: 0.019 s.
+290. APROVADO | src.app.tests.test_mqtt::test_mensagem_encaminha_json_original_sem_token_ou_cabecalho_novo[200-200]
+     Duração JUnit: 0.020 s.
+291. APROVADO | src.app.tests.test_mqtt::test_mensagem_encaminha_json_original_sem_token_ou_cabecalho_novo[201-200]
+     Duração JUnit: 0.020 s.
+292. APROVADO | src.app.tests.test_mqtt::test_mensagem_encaminha_json_original_sem_token_ou_cabecalho_novo[400-401]
+     Duração JUnit: 0.020 s.
+293. APROVADO | src.app.tests.test_mqtt::test_mensagem_encaminha_json_original_sem_token_ou_cabecalho_novo[401-401]
+     Duração JUnit: 0.020 s.
+294. APROVADO | src.app.tests.test_mqtt::test_mensagem_encaminha_json_original_sem_token_ou_cabecalho_novo[403-401]
+     Duração JUnit: 0.020 s.
+295. APROVADO | src.app.tests.test_mqtt::test_mensagem_encaminha_json_original_sem_token_ou_cabecalho_novo[404-401]
+     Duração JUnit: 0.020 s.
+296. APROVADO | src.app.tests.test_mqtt::test_mensagem_encaminha_json_original_sem_token_ou_cabecalho_novo[500-401]
+     Duração JUnit: 0.020 s.
+297. APROVADO | src.app.tests.test_mqtt::test_topico_alheio_nao_encaminha_mensagem
+     Duração JUnit: 0.020 s.
+298. APROVADO | src.app.tests.test_mqtt::test_json_malformado_publica_erro_original[{]
+     Duração JUnit: 0.020 s.
+299. APROVADO | src.app.tests.test_mqtt::test_json_malformado_publica_erro_original[nao-e-json]
+     Duração JUnit: 0.020 s.
+300. APROVADO | src.app.tests.test_mqtt::test_json_malformado_publica_erro_original[]
+     Duração JUnit: 0.020 s.
+301. APROVADO | src.app.tests.test_mqtt::test_falhas_de_rede_publicam_500_com_mocks[ConnectionError]
+     Duração JUnit: 0.025 s.
+302. APROVADO | src.app.tests.test_mqtt::test_falhas_de_rede_publicam_500_com_mocks[Timeout]
+     Duração JUnit: 0.020 s.
+303. APROVADO | src.app.tests.test_mqtt::test_falhas_de_rede_publicam_500_com_mocks[RequestException]
+     Duração JUnit: 0.020 s.
+304. APROVADO | src.app.tests.test_mqtt::test_campos_ausentes_continuam_encaminhados_sem_traducao_automatica
+     Duração JUnit: 0.021 s.
+305. APROVADO | src.app.tests.test_mqtt::test_limite_atual_utf8_invalido_nao_tem_tratamento
+     Duração JUnit: 0.019 s.
+306. APROVADO | src.app.tests.test_mqtt::test_limite_atual_json_lista_nao_tem_tratamento
+     Duração JUnit: 0.019 s.
+307. APROVADO | src.app.tests.test_mqtt::test_resposta_mqtt_preserva_topico_e_codigo_textual[200]
+     Duração JUnit: 0.019 s.
+308. APROVADO | src.app.tests.test_mqtt::test_resposta_mqtt_preserva_topico_e_codigo_textual[401]
+     Duração JUnit: 0.019 s.
+309. APROVADO | src.app.tests.test_mqtt::test_resposta_mqtt_preserva_topico_e_codigo_textual[500]
+     Duração JUnit: 0.019 s.
+310. APROVADO | src.app.tests.test_mqtt::test_erro_na_publicacao_e_registrado_sem_escapar
+     Duração JUnit: 0.019 s.
+311. APROVADO | src.app.tests.test_mqtt::test_cliente_inicia_callbacks_e_loop_originais
+     Duração JUnit: 0.020 s.
+312. APROVADO | src.app.tests.test_mqtt::test_cliente_trata_falha_de_conexao
+     Duração JUnit: 0.020 s.
+313. APROVADO | src.app.tests.test_mqtt::test_interrupcao_desconecta_cliente
+     Duração JUnit: 0.020 s.
+314. APROVADO | src.app.tests.test_permissions::test_permissoes_administrativas_exigem_root[None-401-person-get]
+     Duração JUnit: 0.038 s.
+315. APROVADO | src.app.tests.test_permissions::test_permissoes_administrativas_exigem_root[None-401-grant-put]
+     Duração JUnit: 0.036 s.
+316. APROVADO | src.app.tests.test_permissions::test_permissoes_administrativas_exigem_root[None-401-revoke-post]
+     Duração JUnit: 0.036 s.
+317. APROVADO | src.app.tests.test_permissions::test_permissoes_administrativas_exigem_root[None-401-local-get]
+     Duração JUnit: 0.037 s.
+318. APROVADO | src.app.tests.test_permissions::test_permissoes_administrativas_exigem_root[user-403-person-get]
+     Duração JUnit: 0.039 s.
+319. APROVADO | src.app.tests.test_permissions::test_permissoes_administrativas_exigem_root[user-403-grant-put]
+     Duração JUnit: 0.038 s.
+320. APROVADO | src.app.tests.test_permissions::test_permissoes_administrativas_exigem_root[user-403-revoke-post]
+     Duração JUnit: 0.038 s.
+321. APROVADO | src.app.tests.test_permissions::test_permissoes_administrativas_exigem_root[user-403-local-get]
+     Duração JUnit: 0.038 s.
+322. APROVADO | src.app.tests.test_permissions::test_permissoes_administrativas_exigem_root[visitante-403-person-get]
+     Duração JUnit: 0.039 s.
+323. APROVADO | src.app.tests.test_permissions::test_permissoes_administrativas_exigem_root[visitante-403-grant-put]
+     Duração JUnit: 0.041 s.
+324. APROVADO | src.app.tests.test_permissions::test_permissoes_administrativas_exigem_root[visitante-403-revoke-post]
+     Duração JUnit: 0.039 s.
+325. APROVADO | src.app.tests.test_permissions::test_permissoes_administrativas_exigem_root[visitante-403-local-get]
+     Duração JUnit: 0.040 s.
+326. APROVADO | src.app.tests.test_permissions::test_root_concede_atualiza_e_consulta_sem_alterar_pessoa_ou_expor_segredos
+     Duração JUnit: 0.067 s.
+327. APROVADO | src.app.tests.test_permissions::test_permissao_invalida_nao_e_gravada[body0]
+     Duração JUnit: 0.034 s.
+328. APROVADO | src.app.tests.test_permissions::test_permissao_invalida_nao_e_gravada[body1]
+     Duração JUnit: 0.034 s.
+329. APROVADO | src.app.tests.test_permissions::test_permissao_invalida_nao_e_gravada[body2]
+     Duração JUnit: 0.035 s.
+330. APROVADO | src.app.tests.test_permissions::test_permissao_invalida_nao_e_gravada[body3]
+     Duração JUnit: 0.034 s.
+331. APROVADO | src.app.tests.test_permissions::test_permissao_invalida_nao_e_gravada[body4]
+     Duração JUnit: 0.034 s.
+332. APROVADO | src.app.tests.test_permissions::test_permissao_invalida_nao_e_gravada[body5]
+     Duração JUnit: 0.035 s.
+333. APROVADO | src.app.tests.test_permissions::test_permissao_invalida_nao_e_gravada[body6]
+     Duração JUnit: 0.039 s.
+334. APROVADO | src.app.tests.test_permissions::test_permissao_invalida_nao_e_gravada[body7]
+     Duração JUnit: 0.034 s.
+335. APROVADO | src.app.tests.test_permissions::test_permissao_invalida_nao_e_gravada[body8]
+     Duração JUnit: 0.035 s.
+336. APROVADO | src.app.tests.test_permissions::test_permissao_invalida_nao_e_gravada[body9]
+     Duração JUnit: 0.034 s.
+337. APROVADO | src.app.tests.test_permissions::test_permissao_invalida_nao_e_gravada[body10]
+     Duração JUnit: 0.033 s.
+338. APROVADO | src.app.tests.test_permissions::test_permissao_invalida_nao_e_gravada[body11]
+     Duração JUnit: 0.033 s.
+339. APROVADO | src.app.tests.test_permissions::test_permissao_invalida_nao_e_gravada[body12]
+     Duração JUnit: 0.034 s.
+340. APROVADO | src.app.tests.test_permissions::test_permissao_invalida_nao_e_gravada[body13]
+     Duração JUnit: 0.033 s.
+341. APROVADO | src.app.tests.test_permissions::test_permissao_invalida_nao_e_gravada[body14]
+     Duração JUnit: 0.034 s.
+342. APROVADO | src.app.tests.test_permissions::test_permissao_invalida_nao_e_gravada[body15]
+     Duração JUnit: 0.033 s.
+343. APROVADO | src.app.tests.test_permissions::test_permissao_invalida_nao_e_gravada[None]
+     Duração JUnit: 0.034 s.
+344. APROVADO | src.app.tests.test_permissions::test_json_invalido_das_rotas_novas_preserva_400[{-application/json]
+     Duração JUnit: 0.033 s.
+345. APROVADO | src.app.tests.test_permissions::test_json_invalido_das_rotas_novas_preserva_400[texto-text/plain]
+     Duração JUnit: 0.033 s.
+346. APROVADO | src.app.tests.test_permissions::test_json_invalido_das_rotas_novas_preserva_400[null-application/json]
+     Duração JUnit: 0.033 s.
+347. APROVADO | src.app.tests.test_permissions::test_ids_inexistentes_nao_criam_permissao[99999-1]
+     Duração JUnit: 0.034 s.
+348. APROVADO | src.app.tests.test_permissions::test_ids_inexistentes_nao_criam_permissao[2-99999]
+     Duração JUnit: 0.035 s.
+349. APROVADO | src.app.tests.test_permissions::test_nenhum_perfil_tem_acesso_universal_sem_permissao[user]
+     Duração JUnit: 0.034 s.
+350. APROVADO | src.app.tests.test_permissions::test_nenhum_perfil_tem_acesso_universal_sem_permissao[root]
+     Duração JUnit: 0.040 s.
+351. APROVADO | src.app.tests.test_permissions::test_duas_pessoas_multiplas_salas_e_permissoes_diferentes
+     Duração JUnit: 0.070 s.
+352. APROVADO | src.app.tests.test_permissions::test_condicoes_de_negacao_nunca_abrem_a_porta[agendada]
+     Duração JUnit: 0.036 s.
+353. APROVADO | src.app.tests.test_permissions::test_condicoes_de_negacao_nunca_abrem_a_porta[expirada]
+     Duração JUnit: 0.036 s.
+354. APROVADO | src.app.tests.test_permissions::test_condicoes_de_negacao_nunca_abrem_a_porta[revogada]
+     Duração JUnit: 0.036 s.
+355. APROVADO | src.app.tests.test_permissions::test_condicoes_de_negacao_nunca_abrem_a_porta[inativo]
+     Duração JUnit: 0.036 s.
+356. APROVADO | src.app.tests.test_permissions::test_condicoes_de_negacao_nunca_abrem_a_porta[uid_ausente]
+     Duração JUnit: 0.034 s.
+357. APROVADO | src.app.tests.test_permissions::test_condicoes_de_negacao_nunca_abrem_a_porta[uid_vazia]
+     Duração JUnit: 0.034 s.
+358. APROVADO | src.app.tests.test_permissions::test_condicoes_de_negacao_nunca_abrem_a_porta[sem_pessoa]
+     Duração JUnit: 0.036 s.
+359. APROVADO | src.app.tests.test_permissions::test_condicoes_de_negacao_nunca_abrem_a_porta[tag_inexistente]
+     Duração JUnit: 0.036 s.
+360. APROVADO | src.app.tests.test_permissions::test_inicio_inclusivo_e_fim_exclusivo_da_permissao[-1-agendada]
+     Duração JUnit: 0.037 s.
+361. APROVADO | src.app.tests.test_permissions::test_inicio_inclusivo_e_fim_exclusivo_da_permissao[0-vigente]
+     Duração JUnit: 0.031 s.
+362. APROVADO | src.app.tests.test_permissions::test_inicio_inclusivo_e_fim_exclusivo_da_permissao[3599-vigente]
+     Duração JUnit: 0.031 s.
+363. APROVADO | src.app.tests.test_permissions::test_inicio_inclusivo_e_fim_exclusivo_da_permissao[3600-expirada]
+     Duração JUnit: 0.030 s.
+364. APROVADO | src.app.tests.test_permissions::test_visitante_usa_intersecao_de_validade_global_e_por_local
+     Duração JUnit: 0.067 s.
+365. APROVADO | src.app.tests.test_permissions::test_revogar_sala_nao_exclui_pessoa_ou_outras_permissoes
+     Duração JUnit: 0.077 s.
+366. APROVADO | src.app.tests.test_permissions::test_lista_local_distingue_permissao_vigente_de_acesso_efetivo
+     Duração JUnit: 0.080 s.
+367. APROVADO | src.app.tests.test_permissions::test_filtro_por_situacao_individual[agendada-values0]
+     Duração JUnit: 0.044 s.
+368. APROVADO | src.app.tests.test_permissions::test_filtro_por_situacao_individual[expirada-values1]
+     Duração JUnit: 0.044 s.
+369. APROVADO | src.app.tests.test_permissions::test_filtro_por_situacao_individual[revogada-values2]
+     Duração JUnit: 0.043 s.
+370. APROVADO | src.app.tests.test_permissions::test_filtros_administrativos_invalidos_retornam_400[pagina=0]
+     Duração JUnit: 0.032 s.
+371. APROVADO | src.app.tests.test_permissions::test_filtros_administrativos_invalidos_retornam_400[limite=0]
+     Duração JUnit: 0.032 s.
+372. APROVADO | src.app.tests.test_permissions::test_filtros_administrativos_invalidos_retornam_400[limite=101]
+     Duração JUnit: 0.032 s.
+373. APROVADO | src.app.tests.test_permissions::test_filtros_administrativos_invalidos_retornam_400[pagina=abc]
+     Duração JUnit: 0.034 s.
+374. APROVADO | src.app.tests.test_permissions::test_filtros_administrativos_invalidos_retornam_400[pagina=9999999999999999999999999]
+     Duração JUnit: 0.032 s.
+375. APROVADO | src.app.tests.test_permissions::test_filtros_administrativos_invalidos_retornam_400[pagina=9223372036854775807&limite=100]
+     Duração JUnit: 0.032 s.
+376. APROVADO | src.app.tests.test_permissions::test_filtros_administrativos_invalidos_retornam_400[situacao=invalida]
+     Duração JUnit: 0.032 s.
+377. APROVADO | src.app.tests.test_permissions::test_filtros_administrativos_invalidos_retornam_400[situacao=]
+     Duração JUnit: 0.032 s.
+378. APROVADO | src.app.tests.test_permissions::test_filtros_administrativos_invalidos_retornam_400[nome=x]
+     Duração JUnit: 0.032 s.
+379. APROVADO | src.app.tests.test_permissions::test_filtros_administrativos_invalidos_retornam_400[pagina=1&pagina=2]
+     Duração JUnit: 0.033 s.
+380. APROVADO | src.app.tests.test_permissions::test_paginacao_pessoa_e_local_preserva_total
+     Duração JUnit: 0.047 s.
+381. APROVADO | src.app.tests.test_permissions::test_edicao_visitante_preserva_metadados_e_nao_reativa_sala_revogada
+     Duração JUnit: 0.065 s.
+382. APROVADO | src.app.tests.test_permissions::test_legado_nao_e_fallback_que_reautoriza_permissa_revogada
+     Duração JUnit: 0.043 s.
+383. APROVADO | src.app.tests.test_permissions::test_troca_de_tag_nao_transfere_permissoes_para_novo_dono
+     Duração JUnit: 0.055 s.
+384. APROVADO | src.app.tests.test_permissions::test_falha_na_gravacao_reverte_a_permissao_sem_expor_sql[error0-500]
+     Duração JUnit: 0.035 s.
+385. APROVADO | src.app.tests.test_permissions::test_falha_na_gravacao_reverte_a_permissao_sem_expor_sql[error1-409]
+     Duração JUnit: 0.035 s.
+386. APROVADO | src.app.tests.test_permissions::test_falha_na_consulta_da_porta_nao_abre_por_padrao
+     Duração JUnit: 0.032 s.
+387. APROVADO | src.app.tests.test_permissions::test_mac_permanece_no_fluxo_rfid_e_nao_vira_campo_obrigatorio_na_porta
+     Duração JUnit: 0.046 s.
+388. APROVADO | src.app.tests.test_permissions::test_uid_numerica_e_credencial_herdada_continuam_consultaveis
+     Duração JUnit: 0.047 s.
+389. APROVADO | src.app.tests.test_permissions::test_validade_da_permissao_e_reavaliada_em_cada_tentativa
+     Duração JUnit: 0.040 s.
+390. APROVADO | src.app.tests.test_permissions::test_falha_sql_administrativa_e_tratada_sem_detalhes_internos[person]
+     Duração JUnit: 0.032 s.
+391. APROVADO | src.app.tests.test_permissions::test_falha_sql_administrativa_e_tratada_sem_detalhes_internos[local]
+     Duração JUnit: 0.032 s.
+392. APROVADO | src.app.tests.test_permissions::test_falha_sql_administrativa_e_tratada_sem_detalhes_internos[revoke]
+     Duração JUnit: 0.033 s.
+393. APROVADO | src.app.tests.test_permissions::test_default_por_local_exclui_credenciais_ausentes_e_preserva_consulta_todas
+     Duração JUnit: 0.053 s.
+394. APROVADO | src.app.tests.test_permissions::test_revogacao_ou_edicao_falha_nao_perde_autorizacao_antes_valida
+     Duração JUnit: 0.038 s.
+395. APROVADO | src.app.tests.test_permissions::test_tag_ja_vinculada_continua_rejeitada_pela_associacao_original
+     Duração JUnit: 0.044 s.
+396. APROVADO | src.app.tests.test_permissions::test_paginacao_de_autorizados_por_local_e_estado_individual
+     Duração JUnit: 0.045 s.
+397. APROVADO | src.app.tests.test_visitors::test_administracao_de_visitantes_exige_root[None-401-post-/visitantes]
+     Duração JUnit: 0.037 s.
+398. APROVADO | src.app.tests.test_visitors::test_administracao_de_visitantes_exige_root[None-401-get-/visitantes]
+     Duração JUnit: 0.039 s.
+399. APROVADO | src.app.tests.test_visitors::test_administracao_de_visitantes_exige_root[None-401-get-/visitantes/999]
+     Duração JUnit: 0.037 s.
+400. APROVADO | src.app.tests.test_visitors::test_administracao_de_visitantes_exige_root[None-401-put-/visitantes/999]
+     Duração JUnit: 0.037 s.
+401. APROVADO | src.app.tests.test_visitors::test_administracao_de_visitantes_exige_root[None-401-post-/visitantes/999/revogar]
+     Duração JUnit: 0.037 s.
+402. APROVADO | src.app.tests.test_visitors::test_administracao_de_visitantes_exige_root[None-401-get-/visitantes/999/acessos]
+     Duração JUnit: 0.037 s.
+403. APROVADO | src.app.tests.test_visitors::test_administracao_de_visitantes_exige_root[user-403-post-/visitantes]
+     Duração JUnit: 0.039 s.
+404. APROVADO | src.app.tests.test_visitors::test_administracao_de_visitantes_exige_root[user-403-get-/visitantes]
+     Duração JUnit: 0.039 s.
+405. APROVADO | src.app.tests.test_visitors::test_administracao_de_visitantes_exige_root[user-403-get-/visitantes/999]
+     Duração JUnit: 0.039 s.
+406. APROVADO | src.app.tests.test_visitors::test_administracao_de_visitantes_exige_root[user-403-put-/visitantes/999]
+     Duração JUnit: 0.038 s.
+407. APROVADO | src.app.tests.test_visitors::test_administracao_de_visitantes_exige_root[user-403-post-/visitantes/999/revogar]
+     Duração JUnit: 0.101 s.
+408. APROVADO | src.app.tests.test_visitors::test_administracao_de_visitantes_exige_root[user-403-get-/visitantes/999/acessos]
+     Duração JUnit: 0.040 s.
+409. APROVADO | src.app.tests.test_visitors::test_administracao_de_visitantes_exige_root[visitante-403-post-/visitantes]
+     Duração JUnit: 0.039 s.
+410. APROVADO | src.app.tests.test_visitors::test_administracao_de_visitantes_exige_root[visitante-403-get-/visitantes]
+     Duração JUnit: 0.039 s.
+411. APROVADO | src.app.tests.test_visitors::test_administracao_de_visitantes_exige_root[visitante-403-get-/visitantes/999]
+     Duração JUnit: 0.039 s.
+412. APROVADO | src.app.tests.test_visitors::test_administracao_de_visitantes_exige_root[visitante-403-put-/visitantes/999]
+     Duração JUnit: 0.039 s.
+413. APROVADO | src.app.tests.test_visitors::test_administracao_de_visitantes_exige_root[visitante-403-post-/visitantes/999/revogar]
+     Duração JUnit: 0.039 s.
+414. APROVADO | src.app.tests.test_visitors::test_administracao_de_visitantes_exige_root[visitante-403-get-/visitantes/999/acessos]
+     Duração JUnit: 0.039 s.
+415. APROVADO | src.app.tests.test_visitors::test_visitante_nao_recebe_permissoes_root_existentes[post-/registrar_root]
+     Duração JUnit: 0.037 s.
+416. APROVADO | src.app.tests.test_visitors::test_visitante_nao_recebe_permissoes_root_existentes[post-/atribuir_rfid_usuario]
+     Duração JUnit: 0.037 s.
+417. APROVADO | src.app.tests.test_visitors::test_visitante_nao_recebe_permissoes_root_existentes[get-/visualizar_todos_usuarios]
+     Duração JUnit: 0.037 s.
+418. APROVADO | src.app.tests.test_visitors::test_visitante_nao_recebe_permissoes_root_existentes[post-/cadastrar_objeto]
+     Duração JUnit: 0.037 s.
+419. APROVADO | src.app.tests.test_visitors::test_visitante_nao_recebe_permissoes_root_existentes[put-/recadastrar_objeto]
+     Duração JUnit: 0.037 s.
+420. APROVADO | src.app.tests.test_visitors::test_visitante_nao_recebe_permissoes_root_existentes[delete-/excluir_objeto]
+     Duração JUnit: 0.037 s.
+421. APROVADO | src.app.tests.test_visitors::test_visitante_nao_recebe_permissoes_root_existentes[post-/cadastrar_local]
+     Duração JUnit: 0.037 s.
+422. APROVADO | src.app.tests.test_visitors::test_visitante_nao_recebe_permissoes_root_existentes[put-/editar_local]
+     Duração JUnit: 0.039 s.
+423. APROVADO | src.app.tests.test_visitors::test_visitante_nao_recebe_permissoes_root_existentes[delete-/excluir_rfid]
+     Duração JUnit: 0.038 s.
+424. APROVADO | src.app.tests.test_visitors::test_cadastro_visitante_reutiliza_user_sem_expor_senha
+     Duração JUnit: 0.277 s.
+425. APROVADO | src.app.tests.test_visitors::test_cadastro_visitante_rejeita_campos_ausentes[nome]
+     Duração JUnit: 0.037 s.
+426. APROVADO | src.app.tests.test_visitors::test_cadastro_visitante_rejeita_campos_ausentes[email]
+     Duração JUnit: 0.036 s.
+427. APROVADO | src.app.tests.test_visitors::test_cadastro_visitante_rejeita_campos_ausentes[senha]
+     Duração JUnit: 0.040 s.
+428. APROVADO | src.app.tests.test_visitors::test_cadastro_visitante_rejeita_campos_ausentes[credencial_rfid]
+     Duração JUnit: 0.036 s.
+429. APROVADO | src.app.tests.test_visitors::test_cadastro_visitante_rejeita_campos_ausentes[inicio]
+     Duração JUnit: 0.037 s.
+430. APROVADO | src.app.tests.test_visitors::test_cadastro_visitante_rejeita_campos_ausentes[expiracao]
+     Duração JUnit: 0.037 s.
+431. APROVADO | src.app.tests.test_visitors::test_cadastro_visitante_rejeita_campos_ausentes[locais]
+     Duração JUnit: 0.037 s.
+432. APROVADO | src.app.tests.test_visitors::test_cadastro_visitante_valida_novos_campos_sem_persistencia_parcial[changes0-400]
+     Duração JUnit: 0.040 s.
+433. APROVADO | src.app.tests.test_visitors::test_cadastro_visitante_valida_novos_campos_sem_persistencia_parcial[changes1-400]
+     Duração JUnit: 0.035 s.
+434. APROVADO | src.app.tests.test_visitors::test_cadastro_visitante_valida_novos_campos_sem_persistencia_parcial[changes2-400]
+     Duração JUnit: 0.035 s.
+435. APROVADO | src.app.tests.test_visitors::test_cadastro_visitante_valida_novos_campos_sem_persistencia_parcial[changes3-400]
+     Duração JUnit: 0.035 s.
+436. APROVADO | src.app.tests.test_visitors::test_cadastro_visitante_valida_novos_campos_sem_persistencia_parcial[changes4-400]
+     Duração JUnit: 0.035 s.
+437. APROVADO | src.app.tests.test_visitors::test_cadastro_visitante_valida_novos_campos_sem_persistencia_parcial[changes5-400]
+     Duração JUnit: 0.035 s.
+438. APROVADO | src.app.tests.test_visitors::test_cadastro_visitante_valida_novos_campos_sem_persistencia_parcial[changes6-400]
+     Duração JUnit: 0.035 s.
+439. APROVADO | src.app.tests.test_visitors::test_cadastro_visitante_valida_novos_campos_sem_persistencia_parcial[changes7-400]
+     Duração JUnit: 0.035 s.
+440. APROVADO | src.app.tests.test_visitors::test_cadastro_visitante_valida_novos_campos_sem_persistencia_parcial[changes8-400]
+     Duração JUnit: 0.045 s.
+441. APROVADO | src.app.tests.test_visitors::test_cadastro_visitante_valida_novos_campos_sem_persistencia_parcial[changes9-400]
+     Duração JUnit: 0.035 s.
+442. APROVADO | src.app.tests.test_visitors::test_cadastro_visitante_valida_novos_campos_sem_persistencia_parcial[changes10-404]
+     Duração JUnit: 0.038 s.
+443. APROVADO | src.app.tests.test_visitors::test_cadastro_visitante_valida_novos_campos_sem_persistencia_parcial[changes11-409]
+     Duração JUnit: 0.037 s.
+444. APROVADO | src.app.tests.test_visitors::test_cadastro_visitante_valida_novos_campos_sem_persistencia_parcial[changes12-409]
+     Duração JUnit: 0.038 s.
+445. APROVADO | src.app.tests.test_visitors::test_cadastro_visitante_valida_novos_campos_sem_persistencia_parcial[changes13-409]
+     Duração JUnit: 0.035 s.
+446. APROVADO | src.app.tests.test_visitors::test_cadastro_visitante_valida_novos_campos_sem_persistencia_parcial[changes14-400]
+     Duração JUnit: 0.037 s.
+447. APROVADO | src.app.tests.test_visitors::test_cadastro_visitante_valida_novos_campos_sem_persistencia_parcial[changes15-400]
+     Duração JUnit: 0.037 s.
+448. APROVADO | src.app.tests.test_visitors::test_cadastro_visitante_valida_novos_campos_sem_persistencia_parcial[changes16-400]
+     Duração JUnit: 0.038 s.
+449. APROVADO | src.app.tests.test_visitors::test_cadastro_visitante_valida_novos_campos_sem_persistencia_parcial[changes17-400]
+     Duração JUnit: 0.037 s.
+450. APROVADO | src.app.tests.test_visitors::test_cadastro_visitante_valida_novos_campos_sem_persistencia_parcial[changes18-400]
+     Duração JUnit: 0.037 s.
+451. APROVADO | src.app.tests.test_visitors::test_cadastro_visitante_valida_novos_campos_sem_persistencia_parcial[changes19-400]
+     Duração JUnit: 0.042 s.
+452. APROVADO | src.app.tests.test_visitors::test_cadastro_visitante_valida_novos_campos_sem_persistencia_parcial[changes20-400]
+     Duração JUnit: 0.037 s.
+453. APROVADO | src.app.tests.test_visitors::test_cadastro_visitante_valida_novos_campos_sem_persistencia_parcial[changes21-400]
+     Duração JUnit: 0.040 s.
+454. APROVADO | src.app.tests.test_visitors::test_cadastro_visitante_valida_novos_campos_sem_persistencia_parcial[changes22-400]
+     Duração JUnit: 0.040 s.
+455. APROVADO | src.app.tests.test_visitors::test_cadastro_visitante_valida_novos_campos_sem_persistencia_parcial[changes23-400]
+     Duração JUnit: 0.037 s.
+456. APROVADO | src.app.tests.test_visitors::test_cadastro_visitante_valida_novos_campos_sem_persistencia_parcial[changes24-400]
+     Duração JUnit: 0.037 s.
+457. APROVADO | src.app.tests.test_visitors::test_cadastro_visitante_valida_novos_campos_sem_persistencia_parcial[changes25-404]
+     Duração JUnit: 0.038 s.
+458. APROVADO | src.app.tests.test_visitors::test_cadastro_visitante_valida_novos_campos_sem_persistencia_parcial[changes26-400]
+     Duração JUnit: 0.037 s.
+459. APROVADO | src.app.tests.test_visitors::test_cadastro_visitante_valida_novos_campos_sem_persistencia_parcial[changes27-400]
+     Duração JUnit: 0.035 s.
+460. APROVADO | src.app.tests.test_visitors::test_cadastro_visitante_valida_novos_campos_sem_persistencia_parcial[changes28-400]
+     Duração JUnit: 0.035 s.
+461. APROVADO | src.app.tests.test_visitors::test_periodo_visitante_exige_inicio_anterior_a_expiracao[igual]
+     Duração JUnit: 0.035 s.
+462. APROVADO | src.app.tests.test_visitors::test_periodo_visitante_exige_inicio_anterior_a_expiracao[invertido]
+     Duração JUnit: 0.035 s.
+463. APROVADO | src.app.tests.test_visitors::test_datas_visitante_com_offset_sao_armazenadas_em_utc
+     Duração JUnit: 0.159 s.
+464. APROVADO | src.app.tests.test_visitors::test_filtro_administrativo_por_situacao[ativo]
+     Duração JUnit: 0.067 s.
+465. APROVADO | src.app.tests.test_visitors::test_filtro_administrativo_por_situacao[agendado]
+     Duração JUnit: 0.062 s.
+466. APROVADO | src.app.tests.test_visitors::test_filtro_administrativo_por_situacao[expirado]
+     Duração JUnit: 0.062 s.
+467. APROVADO | src.app.tests.test_visitors::test_filtro_administrativo_por_situacao[revogado]
+     Duração JUnit: 0.061 s.
+468. APROVADO | src.app.tests.test_visitors::test_paginacao_visitantes_nao_expoe_hashes
+     Duração JUnit: 0.050 s.
+469. APROVADO | src.app.tests.test_visitors::test_listagem_visitantes_rejeita_filtros_invalidos[pagina=0]
+     Duração JUnit: 0.028 s.
+470. APROVADO | src.app.tests.test_visitors::test_listagem_visitantes_rejeita_filtros_invalidos[pagina=abc]
+     Duração JUnit: 0.028 s.
+471. APROVADO | src.app.tests.test_visitors::test_listagem_visitantes_rejeita_filtros_invalidos[limite=0]
+     Duração JUnit: 0.028 s.
+472. APROVADO | src.app.tests.test_visitors::test_listagem_visitantes_rejeita_filtros_invalidos[limite=101]
+     Duração JUnit: 0.028 s.
+473. APROVADO | src.app.tests.test_visitors::test_listagem_visitantes_rejeita_filtros_invalidos[limite=1.5]
+     Duração JUnit: 0.028 s.
+474. APROVADO | src.app.tests.test_visitors::test_listagem_visitantes_rejeita_filtros_invalidos[status=invalido]
+     Duração JUnit: 0.029 s.
+475. APROVADO | src.app.tests.test_visitors::test_consulta_individual_nao_confunde_user_ou_root_com_visitante
+     Duração JUnit: 0.058 s.
+476. APROVADO | src.app.tests.test_visitors::test_visitante_inexistente_retorna_404[get-]
+     Duração JUnit: 0.029 s.
+477. APROVADO | src.app.tests.test_visitors::test_visitante_inexistente_retorna_404[put-]
+     Duração JUnit: 0.029 s.
+478. APROVADO | src.app.tests.test_visitors::test_visitante_inexistente_retorna_404[post-/revogar]
+     Duração JUnit: 0.029 s.
+479. APROVADO | src.app.tests.test_visitors::test_visitante_inexistente_retorna_404[get-/acessos]
+     Duração JUnit: 0.029 s.
+480. APROVADO | src.app.tests.test_visitors::test_edicao_periodo_local_e_uid_preserva_perfil
+     Duração JUnit: 0.052 s.
+481. APROVADO | src.app.tests.test_visitors::test_edicao_invalida_nao_altera_visitante[changes0-400]
+     Duração JUnit: 0.042 s.
+482. APROVADO | src.app.tests.test_visitors::test_edicao_invalida_nao_altera_visitante[changes1-400]
+     Duração JUnit: 0.042 s.
+483. APROVADO | src.app.tests.test_visitors::test_edicao_invalida_nao_altera_visitante[changes2-400]
+     Duração JUnit: 0.042 s.
+484. APROVADO | src.app.tests.test_visitors::test_edicao_invalida_nao_altera_visitante[changes3-404]
+     Duração JUnit: 0.045 s.
+485. APROVADO | src.app.tests.test_visitors::test_edicao_invalida_nao_altera_visitante[changes4-409]
+     Duração JUnit: 0.044 s.
+486. APROVADO | src.app.tests.test_visitors::test_edicao_invalida_nao_altera_visitante[changes5-400]
+     Duração JUnit: 0.042 s.
+487. APROVADO | src.app.tests.test_visitors::test_revogacao_idempotente_nao_exclui_cadastro_ou_historico
+     Duração JUnit: 0.057 s.
+488. APROVADO | src.app.tests.test_visitors::test_acesso_visitante_preserva_payload_respostas_e_registro[ativo-False-200]
+     Duração JUnit: 0.044 s.
+489. APROVADO | src.app.tests.test_visitors::test_acesso_visitante_preserva_payload_respostas_e_registro[agendado-False-403]
+     Duração JUnit: 0.041 s.
+490. APROVADO | src.app.tests.test_visitors::test_acesso_visitante_preserva_payload_respostas_e_registro[expirado-False-403]
+     Duração JUnit: 0.041 s.
+491. APROVADO | src.app.tests.test_visitors::test_acesso_visitante_preserva_payload_respostas_e_registro[revogado-False-403]
+     Duração JUnit: 0.041 s.
+492. APROVADO | src.app.tests.test_visitors::test_acesso_visitante_preserva_payload_respostas_e_registro[ativo-True-403]
+     Duração JUnit: 0.044 s.
+493. APROVADO | src.app.tests.test_visitors::test_limites_temporais_inicio_inclusivo_expiracao_exclusiva[-1-False]
+     Duração JUnit: 0.033 s.
+494. APROVADO | src.app.tests.test_visitors::test_limites_temporais_inicio_inclusivo_expiracao_exclusiva[0-True]
+     Duração JUnit: 0.034 s.
+495. APROVADO | src.app.tests.test_visitors::test_limites_temporais_inicio_inclusivo_expiracao_exclusiva[3599-True]
+     Duração JUnit: 0.034 s.
+496. APROVADO | src.app.tests.test_visitors::test_limites_temporais_inicio_inclusivo_expiracao_exclusiva[3600-False]
+     Duração JUnit: 0.033 s.
+497. APROVADO | src.app.tests.test_visitors::test_expiracao_e_reavaliada_sem_alterar_banco_ou_scheduler
+     Duração JUnit: 0.048 s.
+498. APROVADO | src.app.tests.test_visitors::test_historico_permanece_com_visitante_apos_reassociacao_pela_rota_original
+     Duração JUnit: 0.086 s.
+499. APROVADO | src.app.tests.test_visitors::test_historico_administrativo_filtra_sem_inferir_eventos_antigos
+     Duração JUnit: 0.071 s.
+500. APROVADO | src.app.tests.test_visitors::test_filtros_invalidos_do_historico[resultado=invalido]
+     Duração JUnit: 0.041 s.
+501. APROVADO | src.app.tests.test_visitors::test_filtros_invalidos_do_historico[local=0]
+     Duração JUnit: 0.041 s.
+502. APROVADO | src.app.tests.test_visitors::test_filtros_invalidos_do_historico[local=abc]
+     Duração JUnit: 0.040 s.
+503. APROVADO | src.app.tests.test_visitors::test_filtros_invalidos_do_historico[inicio=sem-fuso]
+     Duração JUnit: 0.041 s.
+504. APROVADO | src.app.tests.test_visitors::test_filtros_invalidos_do_historico[inicio=2026-11-01T12:00:00Z&fim=2026-11-01T10:00:00Z]
+     Duração JUnit: 0.040 s.
+505. APROVADO | src.app.tests.test_visitors::test_filtros_invalidos_do_historico[pagina=0]
+     Duração JUnit: 0.040 s.
+506. APROVADO | src.app.tests.test_visitors::test_visitante_usa_login_jwt_original_sem_promocao
+     Duração JUnit: 0.151 s.
+507. APROVADO | src.app.tests.test_visitors::test_cadastro_publico_original_nao_e_fechado_pelo_novo_perfil
+     Duração JUnit: 0.161 s.
+508. APROVADO | src.app.tests.test_visitors::test_falha_no_cadastro_visitante_reverte_todas_as_inclusoes[offline]
+     Duração JUnit: 0.154 s.
+509. APROVADO | src.app.tests.test_visitors::test_falha_no_cadastro_visitante_reverte_todas_as_inclusoes[conflito]
+     Duração JUnit: 0.154 s.
+510. APROVADO | src.app.tests.test_visitors::test_falha_de_gravacao_preserva_autorizacao_existente[editar]
+     Duração JUnit: 0.045 s.
+511. APROVADO | src.app.tests.test_visitors::test_falha_de_gravacao_preserva_autorizacao_existente[revogar]
+     Duração JUnit: 0.048 s.
+512. APROVADO | src.app.tests.test_visitors::test_falha_no_vinculo_do_historico_reverte_registro_e_nao_abre_porta
+     Duração JUnit: 0.040 s.
+513. APROVADO | src.app.tests.test_visitors::test_json_invalido_e_tratado_apenas_nas_rotas_novas[[]-application/json]
+     Duração JUnit: 0.028 s.
+514. APROVADO | src.app.tests.test_visitors::test_json_invalido_e_tratado_apenas_nas_rotas_novas[null-application/json]
+     Duração JUnit: 0.028 s.
+515. APROVADO | src.app.tests.test_visitors::test_json_invalido_e_tratado_apenas_nas_rotas_novas[{-application/json]
+     Duração JUnit: 0.028 s.
+516. APROVADO | src.app.tests.test_visitors::test_json_invalido_e_tratado_apenas_nas_rotas_novas[texto-text/plain]
+     Duração JUnit: 0.027 s.
+517. APROVADO | src.app.tests.test_visitors::test_visitante_pode_ter_varios_locais_e_edicao_tem_efeito_no_proximo_acesso
+     Duração JUnit: 0.077 s.
+518. APROVADO | src.app.tests.test_visitors::test_permissao_individual_de_comum_ou_root_independe_dos_locais_de_outro_visitante[root]
+     Duração JUnit: 0.043 s.
+519. APROVADO | src.app.tests.test_visitors::test_permissao_individual_de_comum_ou_root_independe_dos_locais_de_outro_visitante[user]
+     Duração JUnit: 0.042 s.
+520. APROVADO | src.app.tests.test_visitors::test_leitura_rfid_de_visitante_mantem_mac_e_resposta_originais[False]
+     Duração JUnit: 0.038 s.
+521. APROVADO | src.app.tests.test_visitors::test_leitura_rfid_de_visitante_mantem_mac_e_resposta_originais[True]
+     Duração JUnit: 0.038 s.
+522. APROVADO | src.app.tests.test_visitors::test_uid_numerica_herdada_permanece_aceita_sem_alterar_tipo_da_coluna
+     Duração JUnit: 0.185 s.
+
+12. REGRESSÃO DOS 57 CENÁRIOS DOM
+
+01. APROVADO | login original informa o perfil e libera somente os dois novos cartões Root
+    Duração: 0.444035 s.
+02. APROVADO | users não vê os cartões nem abre as novas abas
+    Duração: 0.094489 s.
+03. APROVADO | visitante não vê os cartões nem abre as novas abas
+    Duração: 0.068024 s.
+04. APROVADO | listagem mostra validade, RFID, locais e situações recebidas sem inventar dados
+    Duração: 0.081952 s.
+05. APROVADO | filtro de situação e tamanho da página usam somente o contrato existente
+    Duração: 0.071200 s.
+06. APROVADO | cadastro converte horário local em ISO UTC e envia somente os sete campos permitidos
+    Duração: 0.121185 s.
+07. APROVADO | cadastro inválido por periodo não dispara gravação
+    Duração: 0.076516 s.
+08. APROVADO | cadastro inválido por locais não dispara gravação
+    Duração: 0.086913 s.
+09. APROVADO | edição preserva UID numérica inalterada, identificação e precisão original do período
+    Duração: 0.074161 s.
+10. APROVADO | edição sem alterações não envia PUT ou campos não permitidos
+    Duração: 0.084875 s.
+11. APROVADO | revogação confirmada usa a rota existente e conserva o visitante no histórico
+    Duração: 0.057062 s.
+12. APROVADO | histórico do visitante abre relatórios com seu identificador e sem alterar a rota original
+    Duração: 0.125448 s.
+13. APROVADO | resumo usa contagens reais, série SVG e ranking; indicadores sem fonte continuam indisponíveis
+    Duração: 0.136555 s.
+14. APROVADO | período, local, visitante e resultado são aplicados de forma igual aos dois endpoints
+    Duração: 0.060386 s.
+15. APROVADO | CSV mantém os filtros aplicados mesmo com formulário alterado sem aplicar
+    Duração: 0.084959 s.
+16. APROVADO | erro de limite do CSV fica visível e permite nova tentativa sem gerar arquivo
+    Duração: 0.076922 s.
+17. APROVADO | paginação de acessos mantém filtros e não repete a consulta do resumo
+    Duração: 0.076794 s.
+18. APROVADO | histórico vazio apresenta zeros reais e estados vazios, sem criar série ou ranking
+    Duração: 0.064867 s.
+19. APROVADO | limitação da série diária e valores completos são apresentados explicitamente
+    Duração: 0.070018 s.
+20. APROVADO | atividades têm filtros próprios e não recebem local ou visitante do acesso
+    Duração: 0.058300 s.
+21. APROVADO | dados textuais novos são escapados como texto, inclusive em tabela e ranking
+    Duração: 0.077537 s.
+22. APROVADO | logout limpa os dados administrativos, fecha o diálogo e retorna ao painel original
+    Duração: 0.059977 s.
+23. APROVADO | resposta atrasada de consulta não reaparece após sair ou iniciar outra sessão
+    Duração: 0.066395 s.
+24. APROVADO | resposta de filtro antigo não sobrescreve o recorte mais recente
+    Duração: 0.057516 s.
+25. APROVADO | erro ao carregar referências impede envio até atualizar com sucesso
+    Duração: 0.057535 s.
+26. APROVADO | conflito ao salvar permanece visível sem limpar o formulário ou fechar o diálogo
+    Duração: 0.046412 s.
+27. APROVADO | JWT expirado nos novos endpoints retorna ao login e remove os dados privados
+    Duração: 0.065242 s.
+28. APROVADO | todos os destinos anteriores da navegação e o alias de tags permanecem funcionando
+    Duração: 0.049482 s.
+29. APROVADO | paginação de visitantes mantém a situação aplicada mesmo com seleção ainda não aplicada
+    Duração: 0.065818 s.
+30. APROVADO | falha de conexao apresenta mensagem e permite reaplicar os filtros
+    Duração: 0.049196 s.
+31. APROVADO | falha de json apresenta mensagem e permite reaplicar os filtros
+    Duração: 0.068918 s.
+32. APROVADO | dashboard operacional apresenta os dados existentes e inicia com o painel Acessos
+    Duração: 0.052211 s.
+33. APROVADO | cinco módulos alternam um único painel com seleção acessível e dashboard sempre visível
+    Duração: 0.078431 s.
+34. APROVADO | filtros e CSV possuem uma instância compartilhada somente em Acessos e Exportação
+    Duração: 0.136501 s.
+35. APROVADO | teclado usa setas Home e End para foco e seleção das abas sem recarregar a página
+    Duração: 0.224217 s.
+36. APROVADO | módulos preservam recorte aplicado página atual e formulário pendente sem repetir consultas
+    Duração: 0.068081 s.
+37. APROVADO | Patrimônio carrega atividades uma vez e alternar módulos não reaplica seus filtros
+    Duração: 0.055901 s.
+38. APROVADO | Visitantes analítico reaproveita as cinco contagens sem consultar ou alterar contas
+    Duração: 0.064917 s.
+39. APROVADO | Locais detalha somente o ranking recebido e mantém uma única instância dos gráficos
+    Duração: 0.054796 s.
+40. APROVADO | Locais sem acessos autorizados apresenta estado vazio sem distribuição fictícia
+    Duração: 0.066718 s.
+41. APROVADO | alternância interna não altera o conteúdo das outras páginas ou do diálogo de Visitantes
+    Duração: 0.051482 s.
+42. APROVADO | logout limpa também os novos resumos e reinicia Acessos na próxima entrada
+    Duração: 0.087466 s.
+43. APROVADO | ranking com 0 salas mostra Top 3 sem truncar dados do módulo Locais
+    Duração: 0.069100 s.
+44. APROVADO | ranking com 1 salas mostra Top 3 sem truncar dados do módulo Locais
+    Duração: 0.062188 s.
+45. APROVADO | ranking com 2 salas mostra Top 3 sem truncar dados do módulo Locais
+    Duração: 0.062932 s.
+46. APROVADO | ranking com 3 salas mostra Top 3 sem truncar dados do módulo Locais
+    Duração: 0.047566 s.
+47. APROVADO | ranking com 4 salas mostra Top 3 sem truncar dados do módulo Locais
+    Duração: 0.060633 s.
+48. APROVADO | ranking com 10 salas mostra Top 3 sem truncar dados do módulo Locais
+    Duração: 0.047740 s.
+49. APROVADO | expansão do ranking mantém ordem barras contagens e instâncias sem consultas adicionais
+    Duração: 0.059789 s.
+50. APROVADO | novo recorte recolhe o ranking e usa todas as salas da resposta nova no módulo Locais
+    Duração: 0.051018 s.
+51. APROVADO | expansão fica indisponível no estado de loading e não expõe ranking anterior
+    Duração: 0.066844 s.
+52. APROVADO | expansão fica indisponível no estado de erro e não expõe ranking anterior
+    Duração: 0.060939 s.
+53. APROVADO | nome malicioso continua sendo texto seguro quando a quarta sala é expandida
+    Duração: 0.073038 s.
+54. APROVADO | dashboard mantém gráfico e resumo no topo indicadores gerais no meio e ranking abaixo
+    Duração: 0.053159 s.
+55. APROVADO | expandir o ranking preserva Explorar Relatórios filtros tabelas e a instância do gráfico
+    Duração: 0.073011 s.
+56. APROVADO | gráfico vazio mostra mensagem e ícone sem dados fictícios ou novas instâncias
+    Duração: 0.050016 s.
+57. APROVADO | logout recolhe o ranking e a sessão seguinte inicia com Top 3
+    Duração: 0.084004 s.
+
+13. ESTADO DO GIT
+
+As saídas abaixo são cumulativas do workspace. Incluem mudanças anteriores
+a esta etapa que foram preservadas, como .gitignore e a interface já entregue.
+git diff --stat não inclui arquivos untracked; a relação da seção 2 e a
+comparação com a linha de base registram os arquivos desta etapa.
+
+git status --short:
+ M .gitignore
+ M pytest.ini
+ M src/app/routes/app.py
+ M src/app/routes/control_door.py
+ M src/app/static/script.js
+ M src/app/templates/index.html
+ M src/app/tests/test_auth.py
+ M src/database/models.py
+?? .coveragerc
+?? .venv/
+?? documents/documentacao_completa_testes_etapa1.txt
+?? documents/etapa1_pytest_preservacao.md
+?? documents/etapa2_visitantes.txt
+?? documents/etapa3_dashboards_relatorios.txt
+?? documents/etapa4_frontend.txt
+?? documents/permissoes_individuais_backend.txt
+?? documents/proposta_etapa2_visitantes.txt
+?? documents/reorganizacao_dashboard_operacional.txt
+?? documents/reorganizacao_visual_relatorios.txt
+?? requirements-dev.txt
+?? src/app/routes/dashboards.py
+?? src/app/routes/visitors.py
+?? src/app/services/dashboards/
+?? src/app/static/admin.css
+?? src/app/static/admin.js
+?? src/app/templates/admin.html
+?? src/app/tests/conftest.py
+?? src/app/tests/frontend/
+?? src/app/tests/test_access.py
+?? src/app/tests/test_dashboards.py
+?? src/app/tests/test_frontend.py
+?? src/app/tests/test_http.py
+?? src/app/tests/test_inventory.py
+?? src/app/tests/test_models.py
+?? src/app/tests/test_mqtt.py
+?? src/app/tests/test_permissions.py
+?? src/app/tests/test_visitors.py
+?? src/database/permission_legacy.py
+
+git diff --stat:
+ .gitignore                     |   4 +-
+ pytest.ini                     |   6 +-
+ src/app/routes/app.py          |   4 +
+ src/app/routes/control_door.py | 206 +++++++++++++++++++++++++++++++++++++++--
+ src/app/static/script.js       |   2 +
+ src/app/templates/index.html   |  13 +++
+ src/app/tests/test_auth.py     | 175 +++++++++++++++++++++++++++++-----
+ src/database/models.py         |  77 ++++++++++++++-
+ 8 files changed, 450 insertions(+), 37 deletions(-)
+
+
+14. ARTEFATOS E PRÓXIMA ETAPA
+
+/tmp/safe-track-permissoes-m4iyc4hi
+  baseline.json / preservacao.json: comparação de arquivos e modelos.
+  pytest-completo.txt / junit.xml: resultados completos Python.
+  coverage.json / coverage.xml / api-timings.json: cobertura e tempos.
+  frontend-dom.txt / frontend-dom.xml: regressão da interface existente.
+  index-renderizado.html / frontend-api.json: respostas fictícias da execução.
+  pip-check.txt / git-status.txt / git-diff-stat.txt: verificações adicionais.
+
+A Etapa C poderá integrar os novos controles às áreas Pessoas e Locais após
+a autorização correspondente. A transferência no banco real também permanece
+pendente: foi preparada/testada, sem executá-la no ambiente do responsável.
+Os artefatos /tmp são temporários; este documento mantém as explicações e
+resultados no repositório.
